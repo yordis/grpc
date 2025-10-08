@@ -77,7 +77,8 @@ defmodule GRPC.Mixfile do
       --plugin=ProtobufGenerate.Plugins.GRPCWithOptions\
       test/support/transcode_messages.proto \
       test/support/proto/helloworld.proto \
-      test/support/proto/route_guide.proto
+      test/support/proto/route_guide.proto \
+      test/support/google/rpc/error_details.proto
     )
 
     case Mix.shell().cmd(cmd) do

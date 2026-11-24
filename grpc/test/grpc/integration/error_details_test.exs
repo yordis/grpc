@@ -132,4 +132,21 @@ defmodule GRPC.Integration.ErrorDetailsTest do
       assert reply.message == "Hello, OK"
     end)
   end
+
+  test "server emits grpc-status-details-bin as unpadded base64" do
+    run_server(ErrorDetailsServer, fn port ->
+      response =
+        GRPC.Integration.RawHTTP2.unary(
+          port,
+          "/helloworld.Greeter/SayHello",
+          Helloworld.HelloRequest.encode(%Helloworld.HelloRequest{name: "INVALID_ARGUMENT"})
+        )
+
+      {"grpc-status-details-bin", encoded} =
+        List.keyfind(response.headers ++ response.trailers, "grpc-status-details-bin", 0)
+
+      refute String.contains?(encoded, "=")
+      assert {:ok, %Google.Rpc.Status{code: 3}} = GRPC.Google.RPC.decode_status(encoded)
+    end)
+  end
 end

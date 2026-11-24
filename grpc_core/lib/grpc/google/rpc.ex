@@ -4,7 +4,7 @@ defmodule GRPC.Google.RPC do
   def encode_status(%Google.Rpc.Status{} = status) do
     status
     |> Google.Rpc.Status.encode()
-    |> Base.encode64(padding: true)
+    |> Base.encode64(padding: false)
   end
 
   def decode_status(encoded_details_bin) when is_binary(encoded_details_bin) do

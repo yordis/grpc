@@ -613,7 +613,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   def info({:set_resp_headers, headers}, req, state) do
     req = :cowboy_req.set_resp_headers(headers, req)
-    {:ok, req, state}
+    {:ok, req, Map.put(state, :custom_resp_headers?, true)}
   end
 
   def info({:set_resp_trailers, trailers}, req, state) do
@@ -1080,7 +1080,16 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   defp preflight?(_), do: false
 
   defp send_error(req, error, state, reason) do
-    trailers = HTTP2.server_trailers(error.status, error.message, error.details)
+    custom_trailers =
+      state
+      |> Map.get(:resp_trailers, %{})
+      |> HTTP2.encode_metadata()
+
+    trailers =
+      Map.merge(
+        custom_trailers,
+        HTTP2.server_trailers(error.status, error.message, error.details)
+      )
 
     status =
       if state.access_mode == :http_transcoding,
@@ -1088,6 +1097,13 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         else: 200
 
     abort_rpc(state, reason)
+
+    # Custom headers can't ride a trailers-only response, so they go out in
+    # their own frame ahead of the trailers.
+    req =
+      if Map.get(state, :custom_resp_headers?, false) and state.access_mode != :http_transcoding,
+        do: check_sent_resp(req, status),
+        else: req
 
     send_error_trailers(req, status, trailers, state)
   end

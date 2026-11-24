@@ -1,0 +1,52 @@
+#!/bin/sh
+# Downloads the pinned connectconformance release for this host into
+# conformance/.runner/ and verifies it against the release checksums file.
+# Usage: conformance/bin/fetch-runner [version]   (default: CONNECTCONFORMANCE_VERSION or v1.0.7)
+set -eu
+version="${1:-${CONNECTCONFORMANCE_VERSION:-v1.0.7}}"
+here="$(cd "$(dirname "$0")/.." && pwd)"
+dest="$here/.runner"
+num="${version#v}"
+os="$(uname -s)"
+arch="$(uname -m)"
+case "$os" in Darwin | Linux) ;; *) echo "fetch-runner: unsupported OS: $os" >&2; exit 1 ;; esac
+case "$arch" in
+  arm64 | aarch64) [ "$os" = Darwin ] && arch=arm64 || arch=aarch64 ;;
+  x86_64 | amd64) arch=x86_64 ;;
+  *) echo "fetch-runner: unsupported architecture: $arch" >&2; exit 1 ;;
+esac
+asset="connectconformance-$version-$os-$arch.tar.gz"
+checksums="connectconformance_${num}_checksums.txt"
+base="https://github.com/connectrpc/conformance/releases/download/$version"
+
+if [ -x "$dest/connectconformance" ] && [ "$(cat "$dest/VERSION" 2>/dev/null)" = "$version" ]; then
+  echo "$dest/connectconformance ($version) already present"
+  exit 0
+fi
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL -o "$tmp/$asset" "$base/$asset"
+curl -fsSL -o "$tmp/$checksums" "$base/$checksums"
+
+expected="$(awk -v f="$asset" '$2 == f { print $1 }' "$tmp/$checksums")"
+[ -n "$expected" ] || { echo "fetch-runner: $asset not listed in $checksums" >&2; exit 1; }
+if command -v sha256sum >/dev/null 2>&1; then
+  actual="$(sha256sum "$tmp/$asset" | awk '{ print $1 }')"
+else
+  actual="$(shasum -a 256 "$tmp/$asset" | awk '{ print $1 }')"
+fi
+if [ "$expected" != "$actual" ]; then
+  echo "fetch-runner: CHECKSUM MISMATCH for $asset" >&2
+  echo "  expected: $expected" >&2
+  echo "  actual:   $actual" >&2
+  exit 1
+fi
+
+mkdir -p "$dest"
+tar -xzf "$tmp/$asset" -C "$tmp"
+bin="$(find "$tmp" -name connectconformance -type f | head -n 1)"
+[ -n "$bin" ] || { echo "fetch-runner: connectconformance not found in archive" >&2; exit 1; }
+install -m 755 "$bin" "$dest/connectconformance"
+echo "$version" > "$dest/VERSION"
+echo "installed $dest/connectconformance ($version, sha256 verified)"

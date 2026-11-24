@@ -46,4 +46,16 @@ defmodule Conformance.Main do
   end
 
   defp tls_opts(%ServerCompatRequest{use_tls: false}), do: {[], <<>>}
+
+  defp tls_opts(%ServerCompatRequest{server_creds: %{cert: cert, key: key}}) do
+    dir = Path.join(System.tmp_dir!(), "conformance-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    certfile = Path.join(dir, "cert.pem")
+    keyfile = Path.join(dir, "key.pem")
+    File.write!(certfile, cert)
+    File.write!(keyfile, key)
+    File.chmod!(keyfile, 0o600)
+
+    {[cred: GRPC.Credential.new(ssl: [certfile: certfile, keyfile: keyfile])], cert}
+  end
 end

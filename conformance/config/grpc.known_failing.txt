@@ -1,5 +1,6 @@
 # Known failures of the gRPC and gRPC-Web conformance run (config/grpc.yaml).
 # Each group lists test cases that fail because of library behavior, not the harness.
+# Cases that fail non-deterministically are in grpc.known_flaky.txt instead.
 # Regenerate by running the suite and grouping the failures; entries must keep failing.
 
 # grpc-web-error-content-type
@@ -11,6 +12,13 @@ Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMP
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unimplemented
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unimplemented
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/no-responses
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/success
@@ -18,6 +26,13 @@ Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMP
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unimplemented
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unimplemented
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/no-responses
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/client-stream/success
@@ -25,6 +40,13 @@ Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COM
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unimplemented
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unimplemented
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/no-responses
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/success
@@ -32,6 +54,13 @@ Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COM
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
 Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unimplemented
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
+Basic/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unimplemented
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/no-responses
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/success
@@ -40,6 +69,14 @@ Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMP
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unimplemented
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unimplemented
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/no-responses
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/success
@@ -48,6 +85,14 @@ Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMP
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unimplemented
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unimplemented
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/no-responses
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/success
@@ -56,6 +101,14 @@ Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COM
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unimplemented
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unimplemented
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/no-responses
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/success
@@ -64,34 +117,70 @@ Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COM
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
 Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unimplemented
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-responses
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
+Basic/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unimplemented
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Deadline Propagation/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/success
@@ -103,6 +192,17 @@ Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Com
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/success
@@ -114,6 +214,17 @@ Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Com
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/success
@@ -125,6 +236,17 @@ Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Co
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/success
@@ -136,6 +258,17 @@ Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Co
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/success
@@ -150,6 +283,20 @@ Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Com
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/success
@@ -164,6 +311,20 @@ Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Com
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/success
@@ -178,6 +339,20 @@ Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Co
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/success
@@ -192,6 +367,20 @@ Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Co
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/success
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error
 Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/no-response
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/success
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error
+Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/success
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
@@ -235,6 +424,49 @@ Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COM
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unimplemented
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unknown
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
@@ -278,6 +510,49 @@ Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COM
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unimplemented
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unknown
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
@@ -321,6 +596,49 @@ Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:CO
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/unimplemented
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unknown
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
@@ -364,6 +682,49 @@ Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:CO
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unimplemented
 Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unknown
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/aborted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/already-exists
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/canceled
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/data-loss
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/internal
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/not-found
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/out-of-range
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/permission-denied
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unavailable
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unimplemented
+Errors/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unknown
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
@@ -409,6 +770,51 @@ Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COM
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unimplemented
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:true/unary/unknown
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
@@ -454,6 +860,51 @@ Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COM
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unimplemented
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unknown
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
@@ -499,6 +950,51 @@ Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:CO
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/unimplemented
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/full-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/server-stream/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:true/unary/unknown
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/error-with-metadata
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
@@ -544,20 +1040,79 @@ Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:CO
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unicode-error-message
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unimplemented
 Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/full-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/bidi-stream/half-duplex/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-multiple-requests
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-one-request
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/client-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-no-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/error-with-responses
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/server-stream/unknown
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/aborted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/already-exists
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/canceled
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/data-loss
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/deadline-exceeded
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/error-with-metadata
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/failed-precondition
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/internal
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/invalid-argument
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/not-found
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/out-of-range
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/permission-denied
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/resource-exhausted
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unauthenticated
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unavailable
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unicode-error-message
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unimplemented
+Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:true/unary/unknown
 Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:false/bidi-stream/half-duplex/empty-request
 Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:false/client-stream/empty-request
 Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:false/server-stream/empty-request
 Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:false/unary/empty-request
+Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:true/bidi-stream/half-duplex/empty-request
+Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:true/client-stream/empty-request
+Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:true/server-stream/empty-request
+Server Empty Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:true/unary/empty-request
 Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:false/bidi-stream/half-duplex/empty-request
 Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:false/client-stream/empty-request
 Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:false/server-stream/empty-request
 Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:false/unary/empty-request
+Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:true/bidi-stream/half-duplex/empty-request
+Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:true/client-stream/empty-request
+Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:true/server-stream/empty-request
+Server Empty Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:true/unary/empty-request
 gRPC Unexpected Requests/HTTPVersion:2/TLS:false/unexpected-compressed-message
 gRPC Unexpected Requests/HTTPVersion:2/TLS:false/unexpected-compression
+gRPC Unexpected Requests/HTTPVersion:2/TLS:true/unexpected-compressed-message
+gRPC Unexpected Requests/HTTPVersion:2/TLS:true/unexpected-compression
 gRPC-Web Proto Sub-Format Requests/HTTPVersion:1/TLS:false/with-proto-sub-format
 gRPC-Web Proto Sub-Format Requests/HTTPVersion:1/TLS:false/without-proto-sub-format
+gRPC-Web Proto Sub-Format Requests/HTTPVersion:1/TLS:true/with-proto-sub-format
+gRPC-Web Proto Sub-Format Requests/HTTPVersion:1/TLS:true/without-proto-sub-format
 gRPC-Web Proto Sub-Format Requests/HTTPVersion:2/TLS:false/with-proto-sub-format
 gRPC-Web Proto Sub-Format Requests/HTTPVersion:2/TLS:false/without-proto-sub-format
+gRPC-Web Proto Sub-Format Requests/HTTPVersion:2/TLS:true/with-proto-sub-format
+gRPC-Web Proto Sub-Format Requests/HTTPVersion:2/TLS:true/without-proto-sub-format
 gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:false/client-stream/incomplete-message
 gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:false/client-stream/incomplete-message-prefix
 gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:false/server-stream/multiple-requests
@@ -566,6 +1121,14 @@ gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:false/unary/multiple-requests
 gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:false/unary/no-request
 gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:false/unexpected-compressed-message
 gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:false/unexpected-compression
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/client-stream/incomplete-message
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/client-stream/incomplete-message-prefix
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/server-stream/multiple-requests
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/server-stream/no-request
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/unary/multiple-requests
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/unary/no-request
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/unexpected-compressed-message
+gRPC-Web Unexpected Requests/HTTPVersion:1/TLS:true/unexpected-compression
 gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:false/client-stream/incomplete-message
 gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:false/client-stream/incomplete-message-prefix
 gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:false/server-stream/multiple-requests
@@ -574,195 +1137,20 @@ gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:false/unary/multiple-requests
 gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:false/unary/no-request
 gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:false/unexpected-compressed-message
 gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:false/unexpected-compression
-
-# metadata-dropped-on-error
-# Response headers and trailers set by the handler are dropped when the RPC fails with a GRPC.RPCError; only grpc-status, grpc-message and details are sent
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/client-stream/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/client-stream/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/server-stream/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/server-stream/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/unary/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/client-stream/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/client-stream/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/server-stream/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/server-stream/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/unary/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/error
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-no-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-responses
-Duplicate Metadata/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/client-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/client-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/server-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/server-stream/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/server-stream/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/(grpc client impl)/unary/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/full-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/bidi-stream/half-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/client-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/full-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/bidi-stream/half-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/client-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/server-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/server-stream/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/server-stream/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/(grpc client impl)/unary/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/full-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/bidi-stream/half-duplex/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-metadata
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-no-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/error-with-responses
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/error-with-metadata
-
-# details-bin-padding
-# grpc-status-details-bin is base64 encoded with padding; the gRPC spec and the conformance suite expect unpadded base64
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/client-stream/error-multiple-requests
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/aborted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/canceled
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/data-loss
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/internal
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/not-found
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/out-of-range
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/unavailable
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/unimplemented
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/server-stream/unknown
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/aborted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/already-exists
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/canceled
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/data-loss
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/deadline-exceeded
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/failed-precondition
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/internal
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/invalid-argument
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/not-found
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/out-of-range
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/permission-denied
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/resource-exhausted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unauthenticated
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unavailable
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unimplemented
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_GZIP/TLS:false/unary/unknown
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/error-multiple-requests
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/error-one-request
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/already-exists
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/deadline-exceeded
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/failed-precondition
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/invalid-argument
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/out-of-range
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/permission-denied
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/resource-exhausted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/unauthenticated
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/unavailable
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/unimplemented
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/deadline-exceeded
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/failed-precondition
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/invalid-argument
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/permission-denied
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_JSON/Compression:COMPRESSION_IDENTITY/TLS:false/unary/resource-exhausted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/client-stream/error-multiple-requests
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/client-stream/error-one-request
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/already-exists
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/deadline-exceeded
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/failed-precondition
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/invalid-argument
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/permission-denied
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/resource-exhausted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/unauthenticated
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/server-stream/unimplemented
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_GZIP/TLS:false/unary/unicode-error-message
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/client-stream/error-multiple-requests
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/aborted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/canceled
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/internal
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/server-stream/unknown
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/aborted
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/already-exists
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/canceled
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/data-loss
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/internal
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/invalid-argument
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/not-found
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/out-of-range
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unauthenticated
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unavailable
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unicode-error-message
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unimplemented
-Errors/HTTPVersion:2/Protocol:PROTOCOL_GRPC/Codec:CODEC_PROTO/Compression:COMPRESSION_IDENTITY/TLS:false/unary/unknown
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/client-stream/incomplete-message
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/client-stream/incomplete-message-prefix
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/server-stream/multiple-requests
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/server-stream/no-request
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/unary/multiple-requests
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/unary/no-request
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/unexpected-compressed-message
+gRPC-Web Unexpected Requests/HTTPVersion:2/TLS:true/unexpected-compression
 
 # unexpected-requests
 # Malformed or unexpected request handling differs from the conformance expectations (status codes and content-type of the error)
 Unexpected Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:false/unexpected-content-type
+Unexpected Requests/HTTPVersion:1/Protocol:PROTOCOL_GRPC_WEB/TLS:true/unexpected-content-type
 Unexpected Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC/TLS:false/unexpected-content-type
+Unexpected Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC/TLS:true/unexpected-content-type
 Unexpected Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:false/unexpected-content-type
+Unexpected Requests/HTTPVersion:2/Protocol:PROTOCOL_GRPC_WEB/TLS:true/unexpected-content-type

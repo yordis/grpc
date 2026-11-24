@@ -38,7 +38,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, opts),
          {:ok, codec} <- find_codec(sub_type, content_type, server),
-         {:ok, compressor} <- find_compressor(req, server) do
+         {:ok, compressor} <- find_compressor(req, server, access_mode) do
       stream_pid = self()
       started_at = System.monotonic_time()
       http_transcode = access_mode == :http_transcoding
@@ -46,11 +46,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
       # Decode the inbound deadline ONCE, before building the stream, so it can be
       # surfaced to interceptors/handlers and reused for the cancellation timer.
-      timeout_ms =
-        case Map.get(request_headers, "grpc-timeout") do
-          t when is_binary(t) -> GRPC.Transport.Utils.decode_timeout(t)
-          _ -> nil
-        end
+      timeout_ms = request_timeout_ms(access_mode, request_headers)
 
       deadline = timeout_ms && System.monotonic_time(:millisecond) + timeout_ms
 
@@ -105,6 +101,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         }
       }
     else
+      {:error, {:connect, status, headers, error}} ->
+        req = ConnectResponse.reply_error(req, status, headers, error)
+        {:ok, req, state}
+
       {:error, error} ->
         Logger.error(fn -> inspect(error) end)
         trailers = HTTP2.server_trailers(error.status, error.message)
@@ -114,6 +114,22 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   # A gRPC-Web response echoes a grpc-web content-type, never application/grpc.
+  defp request_timeout_ms(:connectrpc, headers) do
+    with t when is_binary(t) <- Map.get(headers, "connect-timeout-ms"),
+         {ms, ""} when ms >= 0 <- Integer.parse(t) do
+      ms
+    else
+      _ -> nil
+    end
+  end
+
+  defp request_timeout_ms(_access_mode, headers) do
+    case Map.get(headers, "grpc-timeout") do
+      t when is_binary(t) -> GRPC.Transport.Utils.decode_timeout(t)
+      _ -> nil
+    end
+  end
+
   defp response_headers(%{access_mode: :grpcweb, codec: codec} = stream) do
     case HTTP2.server_headers(stream) do
       %{"content-type" => "application/grpc-web" <> _} = headers ->
@@ -186,7 +202,29 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     access_mode = resolve_access_mode(req, access_mode, subtype)
     {access_mode, subtype} = pin_transcoded_route(opts, req, access_mode, subtype)
     {access_mode, subtype} = detect_connect(opts, req, content_type, access_mode, subtype)
-    {:ok, access_mode, subtype, content_type}
+
+    if unsupported_connect_content_type?(opts, req, content_type, access_mode) do
+      {:error,
+       {:connect, 415, %{"accept-post" => "application/json, application/proto"},
+        RPCError.exception(
+          status: :unknown,
+          message: "unsupported content-type #{inspect(content_type)}"
+        )}}
+    else
+      {:ok, access_mode, subtype, content_type}
+    end
+  end
+
+  # A POST that declares the Connect protocol version but has a content type that is not
+  # Connect's cannot be served as gRPC either.
+  defp unsupported_connect_content_type?(%{http_transcode_route: true}, _, _, _), do: false
+
+  defp unsupported_connect_content_type?(_opts, req, content_type, access_mode) do
+    access_mode != :connectrpc and extract_http_method(req) == :post and
+      :cowboy_req.header("connect-protocol-version", req) != :undefined and
+      is_binary(content_type) and
+      GRPC.Server.Connect.parse_content_type(content_type) == :error and
+      not String.starts_with?(content_type, "application/grpc")
   end
 
   # A route from an HttpRule is always transcoded, whatever the Content-Type says.
@@ -225,6 +263,41 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
       "PATCH" -> :patch
       other -> String.to_existing_atom(String.downcase(other))
     end
+  end
+
+  # Connect names the request compression in `Content-Encoding` for a unary call, and in
+  # `Connect-Content-Encoding` for a stream.
+  defp find_compressor(req, server, :connectrpc) do
+    header =
+      if stream_content_type?(req), do: "connect-content-encoding", else: "content-encoding"
+
+    case :cowboy_req.header(header, req) do
+      encoding when encoding in [:undefined, "identity"] ->
+        {:ok, nil}
+
+      encoding ->
+        case Enum.find(server.__meta__(:compressors), &(&1.name() == encoding)) do
+          nil ->
+            {:error,
+             {:connect, 501, %{},
+              RPCError.exception(
+                status: :unimplemented,
+                message: "unknown compression #{inspect(encoding)}"
+              )}}
+
+          compressor ->
+            {:ok, compressor}
+        end
+    end
+  end
+
+  defp find_compressor(req, server, _access_mode), do: find_compressor(req, server)
+
+  defp stream_content_type?(req) do
+    match?(
+      {:stream, _},
+      GRPC.Server.Connect.parse_content_type(:cowboy_req.header("content-type", req))
+    )
   end
 
   defp find_compressor(req, server) do

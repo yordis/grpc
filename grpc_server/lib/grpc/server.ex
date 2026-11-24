@@ -311,7 +311,8 @@ defmodule GRPC.Server do
        ) do
     {:ok, data} = adapter.read_body(payload)
 
-    with {:ok, request} <- decode_connect_request(codec, data, req_mod) do
+    with {:ok, data} <- decompress_connect_request(stream, data),
+         {:ok, request} <- decode_connect_request(codec, data, req_mod) do
       call_with_interceptors(res_stream, func_name, stream, request)
     end
   end
@@ -394,6 +395,15 @@ defmodule GRPC.Server do
     {:ok, codec.decode(data, req_mod)}
   rescue
     error -> {:error, internal_error("Could not decode the request message: ", error)}
+  end
+
+  defp decompress_connect_request(%{compressor: nil}, data), do: {:ok, data}
+
+  defp decompress_connect_request(%{compressor: compressor}, data) do
+    {:ok, compressor.decompress(data)}
+  rescue
+    error in RPCError -> {:error, error}
+    error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}
   end
 
   defp decode_connect_request(codec, data, req_mod) do

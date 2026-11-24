@@ -27,9 +27,49 @@ defmodule GRPC.Server.Adapters.Cowboy.ConnectResponse do
   The end of a successful call: sends the held reply, with the trailers as headers.
   """
   def stream_trailers(req, state) do
-    body = Map.get(state, :connect_body, "")
-    req = :cowboy_req.reply(200, trailer_headers(state), body, req)
+    {headers, body} =
+      compress(req, state, trailer_headers(state), Map.get(state, :connect_body, ""))
+
+    req = :cowboy_req.reply(200, headers, body, req)
     {:ok, req, state}
+  end
+
+  # Compresses a unary response with the first codec of `Accept-Encoding` the server has.
+  defp compress(req, state, headers, body) do
+    accepted =
+      case :cowboy_req.header("accept-encoding", req) do
+        :undefined ->
+          []
+
+        value ->
+          value
+          |> String.split(",")
+          |> Enum.map(&(&1 |> String.split(";") |> hd() |> String.trim()))
+      end
+
+    compressor =
+      Enum.find_value(accepted, fn name ->
+        Enum.find(state.stream.server.__meta__(:compressors), &(&1.name() == name))
+      end)
+
+    if compressor && body != "" do
+      {Map.put(headers, "content-encoding", compressor.name()),
+       compressor.compress(IO.iodata_to_binary(body))}
+    else
+      {headers, body}
+    end
+  end
+
+  @doc """
+  Replies with an error before the call starts.
+  """
+  def reply_error(req, http_status, headers, %RPCError{} = error) do
+    :cowboy_req.reply(
+      http_status,
+      Map.put(headers, "content-type", "application/json"),
+      Connect.error_body(error),
+      req
+    )
   end
 
   @doc """

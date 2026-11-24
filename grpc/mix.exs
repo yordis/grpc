@@ -29,8 +29,7 @@ defmodule GRPC.MixProject do
 
   defp deps do
     [
-      # {:grpc_core, path: "../grpc_core"},
-      {:grpc_core, "~> 1.1.0"},
+      {:grpc_core, path: "../grpc_core"},
       {:gun, "~> 2.8.0", optional: true},
       {:mint, "~> 1.9", optional: true},
       {:castore, "~> 1.0", optional: true},

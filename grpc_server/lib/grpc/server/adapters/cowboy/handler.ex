@@ -1149,7 +1149,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     # which has the MSB set to 1.
     {:ok, data, _length} =
       trailers
-      |> Enum.map_join("\r\n", fn {k, v} -> "#{k}: #{v}" end)
+      |> Enum.map_join(fn {k, v} -> "#{k}: #{v}\r\n" end)
       |> GRPC.Message.to_data(message_flag: @trailers_flag)
 
     packed =

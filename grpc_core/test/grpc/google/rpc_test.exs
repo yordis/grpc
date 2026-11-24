@@ -80,7 +80,7 @@ defmodule GRPC.Google.RPCTest do
       }
 
       encoded = GRPC.Google.RPC.encode_status(valid_status)
-      decoded_bytes = Base.decode64!(encoded, padding: true)
+      decoded_bytes = Base.decode64!(encoded, padding: false)
       truncated = binary_part(decoded_bytes, 0, byte_size(decoded_bytes) - 5)
       truncated_base64 = Base.encode64(truncated, padding: true)
 

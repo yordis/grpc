@@ -1,11 +1,9 @@
-# Flaky: the base64 padding of grpc-status-details-bin depends on the payload
-# size, which varies between runs (the payload echoes request headers), so error
-# cases over gRPC pass or fail by chance. This also covers the cases that fail
-# because handler headers and trailers are dropped on error (metadata-dropped-on-error).
-Errors/*/Protocol:PROTOCOL_GRPC/**
-Duplicate Metadata/*/Protocol:PROTOCOL_GRPC/**
+# Cases of the gRPC and gRPC-Web conformance run (config/grpc.yaml) allowed to fail by chance.
 
-# Flaky: the client deadline races the server's error response, whose
-# content-type is wrong for gRPC-Web (see grpc-web-error-content-type in
-# grpc.known_failing.txt).
-Timeouts/*/Protocol:PROTOCOL_GRPC_WEB/**
+# Over HTTP/1 the server answers a message that is over its limit and closes the connection
+# while the client is still sending, so the client may see "unexpected EOF".
+Server Message Size/HTTPVersion:1/**
+
+# Over HTTP/1 a client may reuse a connection that the server has just closed, and see
+# "server closed idle connection".
+Errors/HTTPVersion:1/**

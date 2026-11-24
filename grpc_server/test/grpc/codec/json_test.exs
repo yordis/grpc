@@ -15,7 +15,7 @@ defmodule GRPC.Codec.JSONTest do
       encoded = JSON.encode(request)
 
       assert is_binary(encoded)
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
       assert decoded_map["name"] == "Alice"
     end
 
@@ -23,7 +23,7 @@ defmodule GRPC.Codec.JSONTest do
       request = %Helloworld.HelloRequest{name: "Bob", duration: nil}
       encoded = JSON.encode(request)
 
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
       assert Map.has_key?(decoded_map, "duration")
     end
 
@@ -31,7 +31,7 @@ defmodule GRPC.Codec.JSONTest do
       request = %Helloworld.HelloRequest{name: "", duration: nil}
       encoded = JSON.encode(request)
 
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
       assert Map.has_key?(decoded_map, "name")
       assert Map.has_key?(decoded_map, "duration")
       assert decoded_map["name"] == ""
@@ -41,7 +41,7 @@ defmodule GRPC.Codec.JSONTest do
       reply = %Helloworld.HelloReply{message: ""}
       encoded = JSON.encode(reply)
 
-      decoded_map = JSON.decode(encoded, Helloworld.HelloReply)
+      decoded_map = Jason.decode!(encoded)
       assert Map.has_key?(decoded_map, "message")
       assert decoded_map["message"] == ""
     end
@@ -52,7 +52,7 @@ defmodule GRPC.Codec.JSONTest do
       request = %Helloworld.HelloRequest{name: "Alice", duration: nil}
       encoded = JSON.encode(request, emit_unpopulated: false)
 
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
       assert decoded_map["name"] == "Alice"
       refute Map.has_key?(decoded_map, "duration")
     end
@@ -61,7 +61,7 @@ defmodule GRPC.Codec.JSONTest do
       request = %Helloworld.HelloRequest{name: "Bob", duration: nil}
       encoded = JSON.encode(request, emit_unpopulated: true)
 
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
       assert decoded_map["name"] == "Bob"
       assert Map.has_key?(decoded_map, "duration")
     end
@@ -70,7 +70,7 @@ defmodule GRPC.Codec.JSONTest do
       request = %Helloworld.HelloRequest{name: "", duration: nil}
       encoded = JSON.encode(request, emit_unpopulated: false)
 
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
       refute Map.has_key?(decoded_map, "duration")
     end
 
@@ -79,7 +79,7 @@ defmodule GRPC.Codec.JSONTest do
       encoded = JSON.encode(request, emit_unpopulated: true, use_proto_names: true)
 
       assert is_binary(encoded)
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
       assert decoded_map["name"] == "Charlie"
     end
 
@@ -87,59 +87,53 @@ defmodule GRPC.Codec.JSONTest do
       request = %Helloworld.HelloRequest{name: "Merge Test", duration: nil}
 
       encoded_default = JSON.encode(request)
-      decoded_default = JSON.decode(encoded_default, Helloworld.HelloRequest)
+      decoded_default = Jason.decode!(encoded_default)
       assert Map.has_key?(decoded_default, "duration")
 
       encoded_override = JSON.encode(request, emit_unpopulated: false)
-      decoded_override = JSON.decode(encoded_override, Helloworld.HelloRequest)
+      decoded_override = Jason.decode!(encoded_override)
       refute Map.has_key?(decoded_override, "duration")
 
       encoded_merged = JSON.encode(request, use_proto_names: true)
-      decoded_merged = JSON.decode(encoded_merged, Helloworld.HelloRequest)
+      decoded_merged = Jason.decode!(encoded_merged)
       assert Map.has_key?(decoded_merged, "duration")
     end
   end
 
   describe "decode/2" do
-    test "decodes empty binary to empty map" do
-      assert JSON.decode(<<>>, Helloworld.HelloRequest) == %{}
-    end
-
-    test "decodes JSON binary to map" do
+    test "decodes a message module to its struct" do
       json = ~s({"name": "Charlie", "duration": 42})
-      result = JSON.decode(json, Helloworld.HelloRequest)
 
-      assert is_map(result)
-      assert result["name"] == "Charlie"
-      assert result["duration"] == 42
+      assert JSON.decode(json, Helloworld.HelloRequest) ==
+               %Helloworld.HelloRequest{name: "Charlie", duration: 42}
     end
 
-    test "decodes JSON with missing fields" do
-      json = ~s({"name": "Dave"})
-      result = JSON.decode(json, Helloworld.HelloRequest)
+    test "leaves the fields missing from the JSON at their defaults" do
+      assert JSON.decode(~s({"name": "Dave"}), Helloworld.HelloRequest) ==
+               %Helloworld.HelloRequest{name: "Dave"}
+    end
 
-      assert result["name"] == "Dave"
-      refute Map.has_key?(result, "duration")
+    test "decodes empty binary to the empty message" do
+      assert JSON.decode(<<>>, Helloworld.HelloRequest) == %Helloworld.HelloRequest{}
+    end
+
+    test "decodes to a map when the module is not a message" do
+      assert JSON.decode(~s({"name": "Charlie"}), nil) == %{"name" => "Charlie"}
+      assert JSON.decode(<<>>, nil) == %{}
     end
   end
 
   describe "round-trip encoding/decoding" do
     test "preserves data through encode and decode cycle" do
       original = %Helloworld.HelloRequest{name: "Eve", duration: 100}
-      encoded = JSON.encode(original)
-      decoded = JSON.decode(encoded, Helloworld.HelloRequest)
 
-      assert decoded["name"] == "Eve"
-      assert decoded["duration"] == 100
+      assert original |> JSON.encode() |> JSON.decode(Helloworld.HelloRequest) == original
     end
 
     test "handles empty values correctly" do
-      original = %Helloworld.HelloRequest{name: "", duration: nil}
-      encoded = JSON.encode(original)
-      decoded = JSON.decode(encoded, Helloworld.HelloRequest)
+      original = %Helloworld.HelloRequest{name: "", duration: 0}
 
-      assert decoded["name"] == ""
-      assert is_nil(decoded["duration"]) or not Map.has_key?(decoded, "duration")
+      assert original |> JSON.encode() |> JSON.decode(Helloworld.HelloRequest) == original
     end
   end
 
@@ -163,7 +157,7 @@ defmodule GRPC.Codec.JSONTest do
 
       request = %Helloworld.HelloRequest{name: "Config Test", duration: nil}
       encoded = JSON.encode(request)
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
 
       assert decoded_map["name"] == "Config Test"
       refute Map.has_key?(decoded_map, "duration")
@@ -174,7 +168,7 @@ defmodule GRPC.Codec.JSONTest do
 
       request = %Helloworld.HelloRequest{name: "Config Test 2", duration: nil}
       encoded = JSON.encode(request)
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
 
       assert decoded_map["name"] == "Config Test 2"
       assert Map.has_key?(decoded_map, "duration")
@@ -185,7 +179,7 @@ defmodule GRPC.Codec.JSONTest do
 
       request = %Helloworld.HelloRequest{name: "Override Test", duration: nil}
       encoded = JSON.encode(request, emit_unpopulated: true)
-      decoded_map = JSON.decode(encoded, Helloworld.HelloRequest)
+      decoded_map = Jason.decode!(encoded)
 
       assert decoded_map["name"] == "Override Test"
       assert Map.has_key?(decoded_map, "duration")

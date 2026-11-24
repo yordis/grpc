@@ -48,6 +48,32 @@ defmodule GRPC.Server.Adapters.CowboyTest do
     end
   end
 
+  describe "timeouts" do
+    # Cowboy closes an HTTP/1.1 connection that is idle between requests after
+    # `request_timeout`, 5 seconds by default. A client that reuses the connection at that
+    # moment fails with "server closed idle connection".
+    test "an idle HTTP/1.1 connection is kept as long as an idle HTTP/2 one" do
+      assert %{request_timeout: :infinity, idle_timeout: :infinity} = protocol_opts([])
+    end
+
+    test "idle_timeout sets the time of an idle HTTP/1.1 connection too" do
+      assert %{request_timeout: 1_000, idle_timeout: 1_000} =
+               protocol_opts(idle_timeout: 1_000)
+    end
+
+    test "request_timeout can be set on its own" do
+      assert %{request_timeout: 2_000, idle_timeout: :infinity} =
+               protocol_opts(request_timeout: 2_000)
+    end
+
+    defp protocol_opts(adapter_opts) do
+      spec = Cowboy.child_spec(:endpoint, [], 8082, adapter_opts: adapter_opts)
+      {_, _, [_scheme, _endpoint, _servers, _port, {_, _, start_opts}]} = spec.start
+      [_ref, _transport, _transport_opts, _protocol, opts_map] = start_opts
+      opts_map
+    end
+  end
+
   defp get_socket_opts_from_child_spec(spec) do
     # The adapter's start_link/5 wraps the real ranch mfa as its last argument
     {_Cowboy, _start_link, [_scheme, _endpoint, _servers, _port, {_, _, start_opts}]} =

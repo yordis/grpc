@@ -286,6 +286,9 @@ defmodule GRPC.Server.Adapters.Cowboy do
           env: %{dispatch: {:persistent_term, dispatch_key}},
           idle_timeout: idle_timeout,
           inactivity_timeout: idle_timeout,
+          # For HTTP/1.1: how long a connection waits for its next request. Cowboy closes
+          # it after 5 seconds by default, when a client may be about to reuse it.
+          request_timeout: idle_timeout,
           settings_timeout: idle_timeout,
           stream_handlers: [:grpc_stream_h],
           # The default option is small

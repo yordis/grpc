@@ -32,8 +32,7 @@ defmodule GRPC.Server.Adapters.Cowboy.ConnectResponse do
     compressor =
       if opts[:compress] == false, do: nil, else: Connect.response_compressor(state.stream)
 
-    # The limit of the server is for what it receives; a reply is bound by the 32-bit length only.
-    max_length = Bitwise.bsl(1, 32) - 1
+    max_length = GRPC.Server.max_send_message_length()
 
     case GRPC.Message.to_data(data, compressor: compressor, max_message_length: max_length) do
       {:ok, envelope, _size} ->

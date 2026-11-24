@@ -218,7 +218,10 @@ defmodule GRPC.Server.Connect.StreamTest do
       end)
     end
 
-    test "the limit is for what the server receives, not for what it sends" do
+    test "what the server sends has a limit of its own" do
+      Application.put_env(:grpc, :max_send_message_length, 1_000)
+      on_exit(fn -> Application.delete_env(:grpc, :max_send_message_length) end)
+
       run_server(RouteServer, fn port ->
         rectangle = %Routeguide.Rectangle{lo: %Routeguide.Point{latitude: 97}}
 

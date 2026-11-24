@@ -107,6 +107,56 @@ defmodule GRPC.Server.Connect do
   end
 
   @doc """
+  Reads the query of a GET call: `encoding` and `compression` name the codec and
+  compression, `message` holds the request and `base64` says how it is written.
+
+  Gives `{:ok, params}`, with the keys as strings, or `:error` when the query does not
+  hold a Connect call, which needs `encoding=proto|json`.
+  """
+  def parse_get_query(query) when is_binary(query) do
+    params = URI.decode_query(query)
+
+    case params do
+      %{"encoding" => codec} when codec in ["proto", "json"] -> {:ok, params}
+      _ -> :error
+    end
+  rescue
+    ArgumentError -> :error
+  end
+
+  def parse_get_query(_query), do: :error
+
+  @doc """
+  The request message of a GET call, as sent, before decompression.
+  """
+  def get_message(query) do
+    with {:ok, params} <- parse_get_query(query) do
+      message = Map.get(params, "message", "")
+
+      if Map.get(params, "base64") == "1" do
+        decode_base64(message)
+      else
+        {:ok, message}
+      end
+    else
+      :error -> {:error, RPCError.exception(:invalid_argument, "invalid query")}
+    end
+  end
+
+  # The base64 is the URL-safe form, with or without padding.
+  defp decode_base64(message) do
+    message
+    |> String.replace("+", "-")
+    |> String.replace("/", "_")
+    |> String.trim_trailing("=")
+    |> Base.url_decode64(padding: false)
+    |> case do
+      {:ok, _} = ok -> ok
+      :error -> {:error, RPCError.exception(:invalid_argument, "message is not valid base64")}
+    end
+  end
+
+  @doc """
   The last message of a stream: the error, if any, and the trailers as metadata.
   """
   def end_stream_body(error, trailers) do

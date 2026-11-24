@@ -25,6 +25,25 @@ defmodule GRPC.Protoc.Generator.ServiceTest do
     end
   end
 
+  describe "idempotency level" do
+    test "a method without side effects says so in its options" do
+      service = service()
+      [method] = service.method
+      options = %Google.Protobuf.MethodOptions{idempotency_level: :NO_SIDE_EFFECTS}
+      service = %{service | method: [%{method | options: options}]}
+
+      {_module, content} = Service.generate(context(), service)
+
+      assert content =~ "idempotency_level: :NO_SIDE_EFFECTS"
+    end
+
+    test "a method with an unknown level leaves it out" do
+      {_module, content} = Service.generate(context(), service())
+
+      refute content =~ "idempotency_level"
+    end
+  end
+
   describe "parse_params/2" do
     test "accepts gen_stubs=true and gen_stubs=false" do
       assert CLI.gen_stubs?(CLI.parse_params(context(), "gen_stubs=true"))

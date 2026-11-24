@@ -38,6 +38,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, opts),
          {:ok, codec} <- find_codec(sub_type, content_type, server),
+         :ok <- check_connect_get(req, server, route, access_mode),
          {:ok, compressor} <- find_compressor(req, server, access_mode) do
       stream_pid = self()
       started_at = System.monotonic_time()
@@ -273,12 +274,53 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   defp detect_connect(_opts, req, content_type, access_mode, subtype) do
     with false <- preflight?(req),
-         :post <- extract_http_method(req),
-         {_kind, codec_name} <- GRPC.Server.Connect.parse_content_type(content_type) do
+         {:ok, codec_name} <- connect_codec(req, content_type) do
       {:connectrpc, codec_name}
     else
       _ -> {access_mode, subtype}
     end
+  end
+
+  # A POST names the codec in its content type, a GET in the `encoding` of its query.
+  defp connect_codec(req, content_type) do
+    case extract_http_method(req) do
+      :post ->
+        case GRPC.Server.Connect.parse_content_type(content_type) do
+          {_kind, codec_name} -> {:ok, codec_name}
+          :error -> :error
+        end
+
+      :get ->
+        case GRPC.Server.Connect.parse_get_query(:cowboy_req.qs(req)) do
+          {:ok, %{"encoding" => codec_name}} -> {:ok, codec_name}
+          :error -> :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  # Only a method marked as free of side effects answers a GET.
+  defp check_connect_get(req, server, route, :connectrpc) do
+    if extract_http_method(req) == :get and not get_allowed?(server, route) do
+      {:error,
+       {:connect, 405, %{"allow" => "POST"},
+        RPCError.exception(status: :unknown, message: "method GET is not allowed")}}
+    else
+      :ok
+    end
+  end
+
+  defp check_connect_get(_req, _server, _route, _access_mode), do: :ok
+
+  defp get_allowed?(server, route) do
+    service = server.__meta__(:service)
+
+    Enum.any?(service.__rpc_calls__(), fn {name, _, _, options} ->
+      "/#{service.__meta__(:name)}/#{name}" == route and
+        Map.get(options, :idempotency_level) == :NO_SIDE_EFFECTS
+    end)
   end
 
   defp extract_http_method(req) do
@@ -297,10 +339,28 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   # Connect names the request compression in `Content-Encoding` for a unary call, and in
   # `Connect-Content-Encoding` for a stream.
   defp find_compressor(req, server, :connectrpc) do
+    encoding =
+      if extract_http_method(req) == :get do
+        {:ok, params} = GRPC.Server.Connect.parse_get_query(:cowboy_req.qs(req))
+        Map.get(params, "compression", :undefined)
+      else
+        connect_content_encoding(req)
+      end
+
+    find_connect_compressor(encoding, server)
+  end
+
+  defp find_compressor(req, server, _access_mode), do: find_compressor(req, server)
+
+  defp connect_content_encoding(req) do
     header =
       if stream_content_type?(req), do: "connect-content-encoding", else: "content-encoding"
 
-    case :cowboy_req.header(header, req) do
+    :cowboy_req.header(header, req)
+  end
+
+  defp find_connect_compressor(encoding, server) do
+    case encoding do
       encoding when encoding in [:undefined, "identity"] ->
         {:ok, nil}
 
@@ -320,7 +380,6 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
-  defp find_compressor(req, server, _access_mode), do: find_compressor(req, server)
 
   defp stream_content_type?(req) do
     match?(

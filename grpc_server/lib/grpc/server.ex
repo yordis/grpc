@@ -192,6 +192,23 @@ defmodule GRPC.Server do
           )
         end
 
+        # A Connect client may GET a method that is marked as free of side effects.
+        if Map.get(options, :idempotency_level) == :NO_SIDE_EFFECTS do
+          def __call_rpc__(unquote(path), :get, %{access_mode: :connectrpc} = stream) do
+            GRPC.Server.call(
+              unquote(service_mod),
+              %{
+                stream
+                | service_name: unquote(service_name),
+                  method_name: unquote(to_string(name)),
+                  grpc_type: unquote(grpc_type)
+              },
+              unquote(Macro.escape(rpc)),
+              unquote(func_name)
+            )
+          end
+        end
+
         if http_transcode and Map.has_key?(options, :http) do
           %{value: http_rule} = GRPC.Service.rpc_options(rpc, :http)
           {http_method, http_path, _matches} = Router.build_route(http_rule)
@@ -310,12 +327,12 @@ defmodule GRPC.Server do
          } = stream,
          func_name
        ) do
-    {:ok, data} = adapter.read_body(payload)
-
     if Connect.streaming?(stream) do
+      {:ok, data} = adapter.read_body(payload)
       handle_enveloped_request(res_stream, stream, data, func_name)
     else
-      with {:ok, data} <- decompress_connect_request(stream, data),
+      with {:ok, data} <- connect_unary_body(stream),
+           {:ok, data} <- decompress_connect_request(stream, data),
            {:ok, request} <- decode_connect_request(codec, data, req_mod) do
         call_with_interceptors(res_stream, func_name, stream, request)
       end
@@ -439,6 +456,13 @@ defmodule GRPC.Server do
     error in RPCError -> {:error, error}
     error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}
   end
+
+  # A unary call sends its message in the body, or in the query of a GET.
+  defp connect_unary_body(%{http_method: :get, adapter: adapter, payload: payload}) do
+    payload |> adapter.get_qs() |> Connect.get_message()
+  end
+
+  defp connect_unary_body(%{adapter: adapter, payload: payload}), do: adapter.read_body(payload)
 
   defp decode_connect_request(codec, data, req_mod) do
     {:ok, codec.decode(data, req_mod)}

@@ -57,14 +57,16 @@ defmodule GRPC.Protoc.Generator.Service do
   defp service_arg(type, _streaming? = true), do: "stream(#{type})"
   defp service_arg(type, _streaming?), do: type
 
-  defp opts(%Google.Protobuf.MethodOptions{__pb_extensions__: extensions})
-       when extensions == %{} do
-    %{}
-  end
+  defp opts(%Google.Protobuf.MethodOptions{} = options) do
+    extensions =
+      for {{type, field}, value} <- options.__pb_extensions__ || %{}, into: %{} do
+        {field, %{type: type, value: value}}
+      end
 
-  defp opts(%Google.Protobuf.MethodOptions{__pb_extensions__: extensions}) do
-    for {{type, field}, value} <- extensions, into: %{} do
-      {field, %{type: type, value: value}}
+    # A Connect client may GET a method that has no side effects.
+    case options.idempotency_level do
+      :NO_SIDE_EFFECTS -> Map.put(extensions, :idempotency_level, :NO_SIDE_EFFECTS)
+      _ -> extensions
     end
   end
 end

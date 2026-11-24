@@ -435,8 +435,10 @@ defmodule GRPC.Server do
   end
 
   # A body the codec can't parse is the client's error, not the server's.
-  defp decode_transcoded_body(codec, data, req_mod) do
-    {:ok, codec.decode(data, req_mod)}
+  # Transcoding maps the body into the request by path, so it needs the JSON as a map,
+  # not as the message `req_mod`.
+  defp decode_transcoded_body(codec, data, _req_mod) do
+    {:ok, codec.decode(data, nil)}
   rescue
     error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}
   end

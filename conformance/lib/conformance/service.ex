@@ -9,7 +9,7 @@ defmodule Conformance.Service do
   """
   use GRPC.Server,
     service: Connectrpc.Conformance.V1.ConformanceService.Service,
-    codecs: [GRPC.Codec.Proto, GRPC.Codec.WebText, Conformance.JSONCodec],
+    codecs: [GRPC.Codec.Proto, GRPC.Codec.WebText, GRPC.Codec.JSON],
     compressors: [GRPC.Compressor.Gzip]
 
   alias Connectrpc.Conformance.V1.{

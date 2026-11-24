@@ -37,6 +37,23 @@ defmodule GRPC.Server.Connect.NegotiationTest do
         end)
       end
 
+      test "a 415 for a client that is not Connect carries no body" do
+        run_server(HelloServer, fn port ->
+          response =
+            ConnectClient.request(
+              port,
+              unquote(version),
+              "POST",
+              "/helloworld.Greeter/SayHello",
+              [{"content-type", "image/jpeg"}],
+              "{}"
+            )
+
+          assert response.status == 415
+          assert response.body == ""
+        end)
+      end
+
       test "a verb other than POST is a 405" do
         run_server(HelloServer, fn port ->
           response =

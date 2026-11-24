@@ -102,7 +102,14 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
       }
     else
       {:error, {:connect, status, headers, error}} ->
-        req = ConnectResponse.reply_error(req, status, headers, error)
+        # Only a Connect client reads a JSON error body; a gRPC client takes the status alone.
+        req =
+          if status == 415 and :cowboy_req.header("connect-protocol-version", req) == :undefined do
+            :cowboy_req.reply(415, headers, req)
+          else
+            ConnectResponse.reply_error(req, status, headers, error)
+          end
+
         {:ok, req, state}
 
       {:error, error} ->

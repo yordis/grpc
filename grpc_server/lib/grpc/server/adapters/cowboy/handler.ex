@@ -148,10 +148,16 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   defp response_headers(%{access_mode: :connectrpc, codec: codec} = stream) do
-    %{
-      "content-type" =>
-        GRPC.Server.Connect.content_type(GRPC.Server.Connect.streaming?(stream), codec.name())
-    }
+    streaming? = GRPC.Server.Connect.streaming?(stream)
+    headers = %{"content-type" => GRPC.Server.Connect.content_type(streaming?, codec.name())}
+
+    case streaming? && GRPC.Server.Connect.response_compressor(stream) do
+      compressor when compressor not in [nil, false] ->
+        Map.put(headers, "connect-content-encoding", compressor.name())
+
+      _ ->
+        headers
+    end
   end
 
   defp response_headers(stream), do: HTTP2.server_headers(stream)
@@ -268,7 +274,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   defp detect_connect(_opts, req, content_type, access_mode, subtype) do
     with false <- preflight?(req),
          :post <- extract_http_method(req),
-         {:unary, codec_name} <- GRPC.Server.Connect.parse_content_type(content_type) do
+         {_kind, codec_name} <- GRPC.Server.Connect.parse_content_type(content_type) do
       {:connectrpc, codec_name}
     else
       _ -> {access_mode, subtype}
@@ -529,7 +535,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   # APIs end
 
   def info({:read_full_body, ref, pid}, req, state) do
-    limits = %{max_bytes: state.max_body_size, check_prefix?: state.access_mode == :grpc}
+    limits = %{max_bytes: state.max_body_size, check_prefix?: framed?(state)}
     {s, body, req} = read_full_body(req, [], 0, state[:handling_timer], limits)
     send(pid, {ref, {s, body}})
     {:ok, req, state}
@@ -657,7 +663,14 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   def info({:stream_body, data, opts, is_fin, _}, req, %{access_mode: :connectrpc} = state) do
-    ConnectResponse.stream_body(data, opts, is_fin, req, state)
+    case ConnectResponse.stream_body(data, opts, is_fin, req, state) do
+      {:error, %RPCError{} = error} ->
+        publish_send_error(state, error)
+        {:stop, send_error(req, error, state, :rpc_error), state}
+
+      result ->
+        result
+    end
   end
 
   def info({:stream_body, data, opts, is_fin, _}, req, state) do
@@ -945,9 +958,18 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
-  # Only gRPC bodies are framed; transcoded JSON and gRPC-web text are not.
-  defp scan_frames(%{access_mode: :grpc} = state, data), do: do_scan_frames(state, data)
-  defp scan_frames(state, _data), do: {:ok, state}
+  # Only gRPC and Connect stream bodies are framed; transcoded JSON, Connect unary bodies
+  # and gRPC-web text are not.
+  defp framed?(%{access_mode: :grpc}), do: true
+
+  defp framed?(%{access_mode: :connectrpc, stream: stream}),
+    do: GRPC.Server.Connect.streaming?(stream)
+
+  defp framed?(_state), do: false
+
+  defp scan_frames(state, data) do
+    if framed?(state), do: do_scan_frames(state, data), else: {:ok, state}
+  end
 
   defp do_scan_frames(state, <<>>), do: {:ok, state}
 
@@ -977,7 +999,11 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   # Asks cowboy for a chunk as soon as the next length prefix can be complete, or the
   # current message and the next prefix are in, so each prefix is checked early. With
   # cowboy's default of 8 MB, a chunk comes only after 8 MB or 15 s.
-  defp read_length_opt(%{access_mode: :grpc} = state, opts) do
+  defp read_length_opt(state, opts) do
+    if framed?(state), do: put_read_length(state, opts), else: opts
+  end
+
+  defp put_read_length(state, opts) do
     length =
       case state.frame_remaining do
         0 -> 5 - byte_size(state.frame_prefix)
@@ -986,8 +1012,6 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     Map.put(opts, :length, length)
   end
-
-  defp read_length_opt(_state, opts), do: opts
 
   defp message_too_large(req, state, error) do
     req = send_error(req, error, state, :message_too_large)

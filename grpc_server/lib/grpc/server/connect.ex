@@ -88,6 +88,38 @@ defmodule GRPC.Server.Connect do
   end
 
   @doc """
+  The compressor for the response: the first of the codings the client accepts that the
+  server has, or `nil`. A stream names them in `Connect-Accept-Encoding`, a unary call in
+  `Accept-Encoding`.
+  """
+  def response_compressor(%{http_request_headers: headers, server: server} = stream) do
+    header = if streaming?(stream), do: "connect-accept-encoding", else: "accept-encoding"
+
+    accepted =
+      headers
+      |> Map.get(header, "")
+      |> String.split(",")
+      |> Enum.map(&(&1 |> String.split(";") |> hd() |> String.trim()))
+
+    compressors = server.__meta__(:compressors)
+
+    Enum.find_value(accepted, fn name -> Enum.find(compressors, &(&1.name() == name)) end)
+  end
+
+  @doc """
+  The last message of a stream: the error, if any, and the trailers as metadata.
+  """
+  def end_stream_body(error, trailers) do
+    metadata =
+      Map.new(trailers, fn {name, value} -> {name, List.wrap(value)} end)
+
+    %{}
+    |> then(fn map -> if error, do: Map.put(map, "error", error_map(error)), else: map end)
+    |> then(fn map -> if metadata == %{}, do: map, else: Map.put(map, "metadata", metadata) end)
+    |> Jason.encode_to_iodata!()
+  end
+
+  @doc """
   The content type of a response.
   """
   def content_type(streaming?, codec_name)

@@ -112,6 +112,7 @@ defmodule GRPC.Server do
   """
 
   alias GRPC.RPCError
+  alias GRPC.Server.Connect
   alias GRPC.Server.Router
   alias GRPC.Server.Transcode
 
@@ -311,9 +312,13 @@ defmodule GRPC.Server do
        ) do
     {:ok, data} = adapter.read_body(payload)
 
-    with {:ok, data} <- decompress_connect_request(stream, data),
-         {:ok, request} <- decode_connect_request(codec, data, req_mod) do
-      call_with_interceptors(res_stream, func_name, stream, request)
+    if Connect.streaming?(stream) do
+      handle_enveloped_request(res_stream, stream, data, func_name)
+    else
+      with {:ok, data} <- decompress_connect_request(stream, data),
+           {:ok, request} <- decode_connect_request(codec, data, req_mod) do
+        call_with_interceptors(res_stream, func_name, stream, request)
+      end
     end
   end
 
@@ -324,16 +329,11 @@ defmodule GRPC.Server do
   defp do_handle_request(
          false,
          res_stream,
-         %{request_mod: req_mod, codec: codec, adapter: adapter, payload: payload} = stream,
+         %{adapter: adapter, payload: payload} = stream,
          func_name
        ) do
     {:ok, data} = adapter.read_body(payload)
-
-    with {:ok, body} <- unpack_body(codec, data),
-         {:ok, message} <- validate_message(stream, body),
-         {:ok, request} <- decode_request(codec, message, req_mod) do
-      call_with_interceptors(res_stream, func_name, stream, request)
-    end
+    handle_enveloped_request(res_stream, stream, data, func_name)
   end
 
   # Transcoding maps one request message from the path, query and body. A request
@@ -358,6 +358,26 @@ defmodule GRPC.Server do
 
     call_with_interceptors(res_stream, func_name, stream, reading_stream)
   end
+
+  # One request message in an envelope, the form of gRPC and of Connect streams.
+  defp handle_enveloped_request(
+         res_stream,
+         %{request_mod: req_mod, codec: codec} = stream,
+         data,
+         func_name
+       ) do
+    with {:ok, body} <- unpack_body(codec, data),
+         {:ok, message} <- validate_message(stream, body),
+         {:ok, request} <- decode_enveloped(stream, codec, message, req_mod) do
+      call_with_interceptors(res_stream, func_name, stream, request)
+    end
+  end
+
+  # A Connect client's message that does not parse is its own error.
+  defp decode_enveloped(%{access_mode: :connectrpc}, codec, data, req_mod),
+    do: decode_connect_request(codec, data, req_mod)
+
+  defp decode_enveloped(_stream, codec, data, req_mod), do: decode_request(codec, data, req_mod)
 
   defp unpack_body(codec, data) do
     if function_exported?(codec, :unpack_from_channel, 1) do
@@ -418,7 +438,7 @@ defmodule GRPC.Server do
   end
 
   defp decode_stream_message!(%{codec: codec, request_mod: req_mod} = stream, flag, message) do
-    case decode_request(codec, decompress!(stream, flag, message), req_mod) do
+    case decode_enveloped(stream, codec, decompress!(stream, flag, message), req_mod) do
       {:ok, request} -> request
       {:error, error} -> raise error
     end

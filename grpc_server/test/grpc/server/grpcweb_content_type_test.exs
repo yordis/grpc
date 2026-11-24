@@ -12,15 +12,7 @@ defmodule GRPC.Server.GrpcWebContentTypeTest do
   end
 
   setup do
-    {:ok, _pid, port} =
-      start_supervised(%{
-        id: {GRPC.Server, System.unique_integer([:positive])},
-        start: {GRPC.Server, :start, [HelloServer, 0, []]},
-        type: :worker,
-        restart: :permanent,
-        shutdown: 500
-      })
-
+    {:ok, _pid, port} = GRPC.Server.start(HelloServer, 0, [])
     on_exit(fn -> GRPC.Server.stop(HelloServer) end)
     %{port: port}
   end

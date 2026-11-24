@@ -72,7 +72,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
       server_rpc_pid = :proc_lib.spawn_link(__MODULE__, :call_rpc, [server, route, stream])
       Process.flag(:trap_exit, true)
 
-      req = :cowboy_req.set_resp_headers(HTTP2.server_headers(stream), req)
+      req = :cowboy_req.set_resp_headers(response_headers(stream), req)
 
       timer_ref =
         if timeout_ms do
@@ -111,6 +111,19 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         {:ok, req, state}
     end
   end
+
+  # A gRPC-Web response echoes a grpc-web content-type, never application/grpc.
+  defp response_headers(%{access_mode: :grpcweb, codec: codec} = stream) do
+    case HTTP2.server_headers(stream) do
+      %{"content-type" => "application/grpc-web" <> _} = headers ->
+        headers
+
+      headers ->
+        Map.put(headers, "content-type", "application/grpc-web+#{codec.name()}")
+    end
+  end
+
+  defp response_headers(stream), do: HTTP2.server_headers(stream)
 
   defp extract_exception_log_filter_opt(opts) do
     case opts[:exception_log_filter] do
@@ -1136,7 +1149,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     # which has the MSB set to 1.
     {:ok, data, _length} =
       trailers
-      |> Enum.map_join("\r\n", fn {k, v} -> "#{k}: #{v}" end)
+      |> Enum.map_join(fn {k, v} -> "#{k}: #{v}\r\n" end)
       |> GRPC.Message.to_data(message_flag: @trailers_flag)
 
     packed =

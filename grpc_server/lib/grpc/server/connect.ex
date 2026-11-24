@@ -47,6 +47,18 @@ defmodule GRPC.Server.Connect do
   def http_status(status), do: Map.get(@http_statuses, status, 500)
 
   @doc """
+  The status line of a unary response with this gRPC status code, as cowboy takes it.
+
+  Cowboy has no reason phrase for 499, so HTTP/1.1 would fail to write it as a bare integer.
+  """
+  def status_line(status) do
+    case http_status(status) do
+      499 -> "499 Client Closed Request"
+      http_status -> http_status
+    end
+  end
+
+  @doc """
   Reads a request or response content type.
 
   Gives `{:unary, codec_name}` for `application/proto` and `application/json`,

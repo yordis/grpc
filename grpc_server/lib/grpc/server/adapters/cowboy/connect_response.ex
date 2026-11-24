@@ -37,7 +37,7 @@ defmodule GRPC.Server.Adapters.Cowboy.ConnectResponse do
   """
   def send_error(req, %RPCError{} = error, state) do
     headers = Map.put(trailer_headers(state), "content-type", "application/json")
-    :cowboy_req.reply(Connect.http_status(error.status), headers, Connect.error_body(error), req)
+    :cowboy_req.reply(Connect.status_line(error.status), headers, Connect.error_body(error), req)
   end
 
   # The trailers of a unary response are headers with the prefix `trailer-`.

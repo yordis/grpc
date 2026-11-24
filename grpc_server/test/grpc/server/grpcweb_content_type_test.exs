@@ -46,4 +46,12 @@ defmodule GRPC.Server.GrpcWebContentTypeTest do
     assert <<128, _len::32, trailers::binary>> = body
     assert trailers =~ "grpc-status: 3"
   end
+
+  test "each trailer line of the gRPC-web trailer frame ends with CRLF", %{port: port} do
+    {200, _headers, body} = post(port, "application/grpc-web+proto", "web")
+    <<0, reply_len::32, _reply::binary-size(reply_len), 128, len::32, trailers::binary>> = body
+    assert byte_size(trailers) == len
+    assert trailers =~ "grpc-status: 0\r\n"
+    assert String.ends_with?(trailers, "\r\n")
+  end
 end

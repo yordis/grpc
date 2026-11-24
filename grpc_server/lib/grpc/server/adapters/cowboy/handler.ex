@@ -1067,7 +1067,16 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   defp preflight?(_), do: false
 
   defp send_error(req, error, state, reason) do
-    trailers = HTTP2.server_trailers(error.status, error.message, error.details)
+    custom_trailers =
+      state
+      |> Map.get(:resp_trailers, %{})
+      |> HTTP2.encode_metadata()
+
+    trailers =
+      Map.merge(
+        custom_trailers,
+        HTTP2.server_trailers(error.status, error.message, error.details)
+      )
 
     status =
       if state.access_mode == :http_transcoding,

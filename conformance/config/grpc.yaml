@@ -18,8 +18,7 @@ features:
   supportsTlsClientCerts: true
   supportsTrailers: true
   # gRPC-Web over HTTP/1.1 can stream a request and then respond (Cowboy supports it).
-  # The cases currently fail only because of the forced HTTP transcoding bug, which the
-  # known-failing list records.
+  # Any failure of these cases is recorded in the known-failing list.
   supportsHalfDuplexBidiOverHttp1: true
   # Connect GET only applies to the Connect protocol, which is not in this scope.
   supportsConnectGet: false

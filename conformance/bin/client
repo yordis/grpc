@@ -1,0 +1,18 @@
+#!/bin/sh
+# Conformance client launcher. stdin and stdout carry the runner protocol, so
+# nothing else may be written there. Run `mix deps.get && mix compile` first
+# (run.sh does this).
+# Usage: bin/client [--adapter mint|gun]   (or CONFORMANCE_CLIENT_ADAPTER, default mint)
+set -e
+adapter="${CONFORMANCE_CLIENT_ADAPTER:-mint}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --adapter) adapter="$2"; shift 2 ;;
+    --adapter=*) adapter="${1#--adapter=}"; shift ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+case "$adapter" in mint | gun) ;; *) echo "unknown adapter: $adapter" >&2; exit 2 ;; esac
+cd "$(dirname "$0")/.."
+exec env CONFORMANCE_CLIENT_ADAPTER="$adapter" \
+  mix run --no-compile --no-deps-check --no-halt -e 'Conformance.Client.Main.run(Conformance.Client.adapter())'

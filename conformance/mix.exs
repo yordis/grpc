@@ -19,6 +19,9 @@ defmodule Conformance.MixProject do
     [
       {:grpc_server, path: "../grpc_server", override: true},
       {:grpc, path: "../grpc", override: true},
+      {:gun, "~> 2.8.0"},
+      {:mint, "~> 1.9"},
+      {:castore, "~> 1.0"},
       {:protobuf, "~> 0.17"},
       {:jason, "~> 1.4"}
     ]

@@ -1,3 +1,6 @@
+# Scope: the gRPC and gRPC-Web protocols, which this library implements.
+# Every feature the protocol scope allows is on. Failures are tracked in
+# grpc.known_failing.txt rather than by switching features off here.
 features:
   versions: [HTTP_VERSION_1, HTTP_VERSION_2]
   protocols: [PROTOCOL_GRPC, PROTOCOL_GRPC_WEB]
@@ -11,8 +14,14 @@ features:
     - STREAM_TYPE_FULL_DUPLEX_BIDI_STREAM
   supportsH2c: true
   supportsTls: true
-  supportsTlsClientCerts: false
+  # The server requires and pins the runner's client certificate (see Conformance.Main).
+  supportsTlsClientCerts: true
   supportsTrailers: true
+  # gRPC-Web over HTTP/1.1 can stream a request and then respond (Cowboy supports it).
+  # The cases currently fail only because of the forced HTTP transcoding bug, which the
+  # known-failing list records.
   supportsHalfDuplexBidiOverHttp1: true
+  # Connect GET only applies to the Connect protocol, which is not in this scope.
   supportsConnectGet: false
-  supportsMessageReceiveLimit: false
+  # The server applies the limit through the :max_message_length application setting.
+  supportsMessageReceiveLimit: true

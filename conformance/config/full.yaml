@@ -1,3 +1,6 @@
+# Scope: all three protocols. The library has no Connect protocol implementation,
+# so every PROTOCOL_CONNECT case is expected to fail. This config measures that gap;
+# use grpc.yaml for the protocols the library implements.
 features:
   versions: [HTTP_VERSION_1, HTTP_VERSION_2]
   protocols: [PROTOCOL_CONNECT, PROTOCOL_GRPC, PROTOCOL_GRPC_WEB]
@@ -11,8 +14,8 @@ features:
     - STREAM_TYPE_FULL_DUPLEX_BIDI_STREAM
   supportsH2c: true
   supportsTls: true
-  supportsTlsClientCerts: false
+  supportsTlsClientCerts: true
   supportsTrailers: true
   supportsHalfDuplexBidiOverHttp1: true
   supportsConnectGet: true
-  supportsMessageReceiveLimit: false
+  supportsMessageReceiveLimit: true

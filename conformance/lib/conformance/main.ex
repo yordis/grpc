@@ -34,6 +34,12 @@ defmodule Conformance.Main do
   end
 
   defp start_server(request) do
+    # The library bounds each received message by this application setting.
+    case request.message_receive_limit do
+      0 -> :ok
+      limit -> Application.put_env(:grpc, :max_message_length, limit)
+    end
+
     {opts, pem_cert} = tls_opts(request)
 
     {:ok, _pid, port} =
@@ -47,7 +53,7 @@ defmodule Conformance.Main do
 
   defp tls_opts(%ServerCompatRequest{use_tls: false}), do: {[], <<>>}
 
-  defp tls_opts(%ServerCompatRequest{server_creds: %{cert: cert, key: key}}) do
+  defp tls_opts(%ServerCompatRequest{server_creds: %{cert: cert, key: key}} = request) do
     dir = Path.join(System.tmp_dir!(), "conformance-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     certfile = Path.join(dir, "cert.pem")
@@ -56,6 +62,35 @@ defmodule Conformance.Main do
     File.write!(keyfile, key)
     File.chmod!(keyfile, 0o600)
 
-    {[cred: GRPC.Credential.new(ssl: [certfile: certfile, keyfile: keyfile])], cert}
+    ssl = [certfile: certfile, keyfile: keyfile] ++ client_cert_opts(request.client_tls_cert)
+    {[cred: GRPC.Credential.new(ssl: ssl)], cert}
   end
+
+  defp client_cert_opts(<<>>), do: []
+
+  # The runner's client certificate is self-signed with CA:FALSE, which OTP will not
+  # accept as a trust anchor. Trust exactly the certificates the runner gave us instead.
+  defp client_cert_opts(pem) do
+    trusted = for {:Certificate, der, :not_encrypted} <- :public_key.pem_decode(pem), do: der
+
+    [
+      cacerts: trusted,
+      verify: :verify_peer,
+      fail_if_no_peer_cert: true,
+      verify_fun: {&__MODULE__.verify_client_cert/3, trusted}
+    ]
+  end
+
+  @doc false
+  def verify_client_cert(cert, {:bad_cert, reason}, trusted)
+      when reason in [:selfsigned_peer, :unknown_ca] do
+    if :public_key.pkix_encode(:OTPCertificate, cert, :otp) in trusted,
+      do: {:valid, trusted},
+      else: {:fail, {:bad_cert, reason}}
+  end
+
+  def verify_client_cert(_cert, {:bad_cert, _} = reason, _trusted), do: {:fail, reason}
+  def verify_client_cert(_cert, {:extension, _}, trusted), do: {:unknown, trusted}
+  def verify_client_cert(_cert, :valid, trusted), do: {:valid, trusted}
+  def verify_client_cert(_cert, :valid_peer, trusted), do: {:valid, trusted}
 end

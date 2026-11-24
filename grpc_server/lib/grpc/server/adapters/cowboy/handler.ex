@@ -161,6 +161,11 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
+  # A gRPC response names gRPC in its content type, whatever the codec. Only a transcoded
+  # response is plain `application/json`.
+  defp response_headers(%{access_mode: :grpc, codec: codec}),
+    do: %{"content-type" => "application/grpc+#{codec.name()}"}
+
   defp response_headers(stream), do: HTTP2.server_headers(stream)
 
   defp extract_exception_log_filter_opt(opts) do

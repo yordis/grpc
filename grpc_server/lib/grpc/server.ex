@@ -368,8 +368,17 @@ defmodule GRPC.Server do
        ) do
     with {:ok, body} <- unpack_body(codec, data),
          {:ok, message} <- validate_message(stream, body),
+         :ok <- check_decompressed_length(message),
          {:ok, request} <- decode_enveloped(stream, codec, message, req_mod) do
       call_with_interceptors(res_stream, func_name, stream, request)
+    end
+  end
+
+  # The limit is for a message as it travels, and for it once decompressed.
+  defp check_decompressed_length(message) do
+    case message_too_large(byte_size(message)) do
+      nil -> :ok
+      error -> {:error, error}
     end
   end
 
@@ -450,7 +459,9 @@ defmodule GRPC.Server do
     do: raise_internal!("The compressed flag is set, but grpc-encoding names no compressor")
 
   defp decompress!(%{compressor: compressor}, 1, message) do
-    compressor.decompress(message)
+    message = compressor.decompress(message)
+    check_message_length!(message)
+    message
   rescue
     error in RPCError -> reraise error, __STACKTRACE__
     error -> raise internal_error("Could not decompress the request message: ", error)

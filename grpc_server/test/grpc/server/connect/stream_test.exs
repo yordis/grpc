@@ -15,6 +15,10 @@ defmodule GRPC.Server.Connect.StreamTest do
       raise GRPC.RPCError, status: :aborted, message: "stopped"
     end
 
+    def list_features(%{lo: %{latitude: 97}}, stream) do
+      GRPC.Server.send_reply(stream, %Routeguide.Feature{name: String.duplicate("x", 300)})
+    end
+
     def list_features(_rect, stream) do
       GRPC.Server.set_trailers(stream, %{"x-custom-trailer" => "from-server-trailer"})
       GRPC.Server.send_reply(stream, %Routeguide.Feature{name: "one"})
@@ -184,6 +188,53 @@ defmodule GRPC.Server.Connect.StreamTest do
           assert Routeguide.Feature.decode(:zlib.gunzip(one)).name == "one"
         end)
       end
+    end
+  end
+
+  describe "message size" do
+    setup do
+      Application.put_env(:grpc, :max_message_length, 100)
+      on_exit(fn -> Application.delete_env(:grpc, :max_message_length) end)
+    end
+
+    test "a message that is over the limit once decompressed is resource_exhausted" do
+      run_server(RouteServer, fn port ->
+        big = proto(%Routeguide.RouteNote{message: String.duplicate("a", 500)})
+        compressed = :zlib.gzip(big)
+        assert byte_size(compressed) < 100
+
+        response =
+          call(
+            port,
+            :http2,
+            "RouteChat",
+            "application/connect+proto",
+            envelope(1, compressed),
+            [{"connect-content-encoding", "gzip"}]
+          )
+
+        assert [{2, end_stream}] = parse(response.body)
+        assert %{"error" => %{"code" => "resource_exhausted"}} = Jason.decode!(end_stream)
+      end)
+    end
+
+    test "the limit is for what the server receives, not for what it sends" do
+      run_server(RouteServer, fn port ->
+        rectangle = %Routeguide.Rectangle{lo: %Routeguide.Point{latitude: 97}}
+
+        response =
+          call(
+            port,
+            :http2,
+            "ListFeatures",
+            "application/connect+proto",
+            envelope(0, proto(rectangle))
+          )
+
+        assert [{0, feature}, {2, end_stream}] = parse(response.body)
+        assert byte_size(Routeguide.Feature.decode(feature).name) == 300
+        refute Map.has_key?(Jason.decode!(end_stream), "error")
+      end)
     end
   end
 

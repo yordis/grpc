@@ -116,8 +116,18 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
       {:error, error} ->
         Logger.error(fn -> inspect(error) end)
         trailers = HTTP2.server_trailers(error.status, error.message)
+        req = :cowboy_req.set_resp_headers(error_content_type(req), req)
         req = send_error_trailers(req, 200, trailers, state)
         {:ok, req, state}
+    end
+  end
+
+  # A gRPC client reads the status of a call that failed before it started only from a
+  # response whose content type is its own.
+  defp error_content_type(req) do
+    case :cowboy_req.header("content-type", req) do
+      "application/grpc" <> _ = content_type -> %{"content-type" => content_type}
+      _ -> %{"content-type" => "application/grpc"}
     end
   end
 
@@ -396,7 +406,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   defp find_compressor(req, server) do
     encoding = :cowboy_req.header("grpc-encoding", req)
 
-    if is_binary(encoding) do
+    if is_binary(encoding) and encoding != "identity" do
       compressor = Enum.find(server.__meta__(:compressors), nil, fn c -> c.name() == encoding end)
 
       if compressor do

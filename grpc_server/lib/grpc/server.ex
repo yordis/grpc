@@ -397,10 +397,15 @@ defmodule GRPC.Server do
     error -> {:error, internal_error("Could not decode the request message: ", error)}
   end
 
-  defp decompress_connect_request(%{compressor: nil}, data), do: {:ok, data}
-
+  # The limit applies to the body as sent and as decompressed.
   defp decompress_connect_request(%{compressor: compressor}, data) do
-    {:ok, compressor.decompress(data)}
+    with nil <- message_too_large(byte_size(data)),
+         data = if(compressor, do: compressor.decompress(data), else: data),
+         nil <- message_too_large(byte_size(data)) do
+      {:ok, data}
+    else
+      %RPCError{} = error -> {:error, error}
+    end
   rescue
     error in RPCError -> {:error, error}
     error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}

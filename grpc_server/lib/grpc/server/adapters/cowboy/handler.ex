@@ -203,25 +203,41 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     {access_mode, subtype} = pin_transcoded_route(opts, req, access_mode, subtype)
     {access_mode, subtype} = detect_connect(opts, req, content_type, access_mode, subtype)
 
-    if unsupported_connect_content_type?(opts, req, content_type, access_mode) do
-      {:error,
-       {:connect, 415, %{"accept-post" => "application/json, application/proto"},
-        RPCError.exception(
-          status: :unknown,
-          message: "unsupported content-type #{inspect(content_type)}"
-        )}}
-    else
-      {:ok, access_mode, subtype, content_type}
+    cond do
+      wrong_connect_method?(opts, req, content_type) ->
+        {:error,
+         {:connect, 405, %{"allow" => "POST"},
+          RPCError.exception(
+            status: :unknown,
+            message: "method #{:cowboy_req.method(req)} is not allowed"
+          )}}
+
+      unsupported_connect_content_type?(opts, req, content_type, access_mode) ->
+        {:error,
+         {:connect, 415, %{"accept-post" => "application/json, application/proto"},
+          RPCError.exception(
+            status: :unknown,
+            message: "unsupported content-type #{inspect(content_type)}"
+          )}}
+
+      true ->
+        {:ok, access_mode, subtype, content_type}
     end
   end
 
-  # A POST that declares the Connect protocol version but has a content type that is not
-  # Connect's cannot be served as gRPC either.
+  # Connect calls are POST, or GET for a method without side effects.
+  defp wrong_connect_method?(%{http_transcode_route: true}, _req, _content_type), do: false
+
+  defp wrong_connect_method?(_opts, req, content_type) do
+    extract_http_method(req) not in [:post, :get, :options] and
+      GRPC.Server.Connect.parse_content_type(content_type) != :error
+  end
+
+  # A POST whose content type is neither gRPC's nor Connect's: HTTP 415.
   defp unsupported_connect_content_type?(%{http_transcode_route: true}, _, _, _), do: false
 
   defp unsupported_connect_content_type?(_opts, req, content_type, access_mode) do
     access_mode != :connectrpc and extract_http_method(req) == :post and
-      :cowboy_req.header("connect-protocol-version", req) != :undefined and
       is_binary(content_type) and
       GRPC.Server.Connect.parse_content_type(content_type) == :error and
       not String.starts_with?(content_type, "application/grpc")

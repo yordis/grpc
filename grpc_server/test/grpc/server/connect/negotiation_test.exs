@@ -37,6 +37,23 @@ defmodule GRPC.Server.Connect.NegotiationTest do
         end)
       end
 
+      test "a verb other than POST is a 405" do
+        run_server(HelloServer, fn port ->
+          response =
+            ConnectClient.request(
+              port,
+              unquote(version),
+              "PUT",
+              "/helloworld.Greeter/SayHello",
+              [{"content-type", "application/json"}],
+              "{}"
+            )
+
+          assert response.status == 405
+          assert ConnectClient.header(response, "allow") == "POST"
+        end)
+      end
+
       test "Connect-Timeout-Ms sets a deadline" do
         run_server(HelloServer, fn port ->
           response =

@@ -384,27 +384,37 @@ defmodule Connectrpc.Conformance.V1.ConformanceService.Service do
     name: "connectrpc.conformance.v1.ConformanceService",
     protoc_gen_elixir_version: "0.17.1"
 
-  rpc :Unary, Connectrpc.Conformance.V1.UnaryRequest, Connectrpc.Conformance.V1.UnaryResponse
+  rpc(:Unary, Connectrpc.Conformance.V1.UnaryRequest, Connectrpc.Conformance.V1.UnaryResponse)
 
-  rpc :ServerStream,
-      Connectrpc.Conformance.V1.ServerStreamRequest,
-      stream(Connectrpc.Conformance.V1.ServerStreamResponse)
+  rpc(
+    :ServerStream,
+    Connectrpc.Conformance.V1.ServerStreamRequest,
+    stream(Connectrpc.Conformance.V1.ServerStreamResponse)
+  )
 
-  rpc :ClientStream,
-      stream(Connectrpc.Conformance.V1.ClientStreamRequest),
-      Connectrpc.Conformance.V1.ClientStreamResponse
+  rpc(
+    :ClientStream,
+    stream(Connectrpc.Conformance.V1.ClientStreamRequest),
+    Connectrpc.Conformance.V1.ClientStreamResponse
+  )
 
-  rpc :BidiStream,
-      stream(Connectrpc.Conformance.V1.BidiStreamRequest),
-      stream(Connectrpc.Conformance.V1.BidiStreamResponse)
+  rpc(
+    :BidiStream,
+    stream(Connectrpc.Conformance.V1.BidiStreamRequest),
+    stream(Connectrpc.Conformance.V1.BidiStreamResponse)
+  )
 
-  rpc :Unimplemented,
-      Connectrpc.Conformance.V1.UnimplementedRequest,
-      Connectrpc.Conformance.V1.UnimplementedResponse
+  rpc(
+    :Unimplemented,
+    Connectrpc.Conformance.V1.UnimplementedRequest,
+    Connectrpc.Conformance.V1.UnimplementedResponse
+  )
 
-  rpc :IdempotentUnary,
-      Connectrpc.Conformance.V1.IdempotentUnaryRequest,
-      Connectrpc.Conformance.V1.IdempotentUnaryResponse
+  rpc(
+    :IdempotentUnary,
+    Connectrpc.Conformance.V1.IdempotentUnaryRequest,
+    Connectrpc.Conformance.V1.IdempotentUnaryResponse
+  )
 end
 
 defmodule Connectrpc.Conformance.V1.ConformanceService.Stub do

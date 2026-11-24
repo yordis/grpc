@@ -1,0 +1,4 @@
+# Flaky: the client deadline races the server's error response, whose
+# content-type is wrong for gRPC-Web (see grpc-web-error-content-type in
+# grpc.known_failing.txt). Depending on timing the case fails or passes.
+Timeouts/*/Protocol:PROTOCOL_GRPC_WEB/**

@@ -6,6 +6,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   alias GRPC.Server.Adapters.ReportException
   alias GRPC.Transport.HTTP2
   alias GRPC.RPCError
+  alias GRPC.Server.Adapters.Cowboy.ConnectResponse
   require Logger
 
   @behaviour :cowboy_loop
@@ -123,6 +124,13 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
+  defp response_headers(%{access_mode: :connectrpc, codec: codec} = stream) do
+    %{
+      "content-type" =>
+        GRPC.Server.Connect.content_type(GRPC.Server.Connect.streaming?(stream), codec.name())
+    }
+  end
+
   defp response_headers(stream), do: HTTP2.server_headers(stream)
 
   defp extract_exception_log_filter_opt(opts) do
@@ -177,6 +185,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     access_mode = resolve_access_mode(req, access_mode, subtype)
     {access_mode, subtype} = pin_transcoded_route(opts, req, access_mode, subtype)
+    {access_mode, subtype} = detect_connect(opts, req, content_type, access_mode, subtype)
     {:ok, access_mode, subtype, content_type}
   end
 
@@ -189,6 +198,21 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   defp pin_transcoded_route(_opts, _req, access_mode, subtype), do: {access_mode, subtype}
+
+  # A request that names a Connect content type is a Connect call, unless the route comes
+  # from an HttpRule, which is always transcoded.
+  defp detect_connect(%{http_transcode_route: true}, _req, _content_type, access_mode, subtype),
+    do: {access_mode, subtype}
+
+  defp detect_connect(_opts, req, content_type, access_mode, subtype) do
+    with false <- preflight?(req),
+         :post <- extract_http_method(req),
+         {:unary, codec_name} <- GRPC.Server.Connect.parse_content_type(content_type) do
+      {:connectrpc, codec_name}
+    else
+      _ -> {access_mode, subtype}
+    end
+  end
 
   defp extract_http_method(req) do
     case :cowboy_req.method(req) do
@@ -536,6 +560,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     {:ok, req, state}
   end
 
+  def info({:stream_body, data, opts, is_fin, _}, req, %{access_mode: :connectrpc} = state) do
+    ConnectResponse.stream_body(data, opts, is_fin, req, state)
+  end
+
   def info({:stream_body, data, opts, is_fin, _}, req, state) do
     # If compressor exists, compress is true by default
     compressor =
@@ -606,6 +634,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
       {:stop, req, state}
   end
 
+  def info({:stream_reply, status, headers}, req, %{access_mode: :connectrpc} = state) do
+    ConnectResponse.stream_reply(status, headers, req, state)
+  end
+
   def info({:stream_reply, status, headers}, req, state) do
     req = :cowboy_req.stream_reply(status, headers, req)
     {:ok, req, state}
@@ -618,6 +650,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   def info({:set_resp_trailers, trailers}, req, state) do
     {:ok, req, Map.put(state, :resp_trailers, trailers)}
+  end
+
+  def info({:stream_trailers, _trailers}, req, %{access_mode: :connectrpc} = state) do
+    ConnectResponse.stream_trailers(req, state)
   end
 
   def info({:stream_trailers, trailers}, req, state) do
@@ -1078,6 +1114,11 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   defp preflight?(%{method: "OPTIONS"}), do: true
   defp preflight?(_), do: false
+
+  defp send_error(req, error, %{access_mode: :connectrpc} = state, reason) do
+    abort_rpc(state, reason)
+    ConnectResponse.send_error(req, error, state)
+  end
 
   defp send_error(req, error, state, reason) do
     custom_trailers =

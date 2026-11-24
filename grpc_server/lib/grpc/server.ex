@@ -297,6 +297,25 @@ defmodule GRPC.Server do
     end
   end
 
+  defp do_handle_request(
+         false,
+         res_stream,
+         %{
+           request_mod: req_mod,
+           codec: codec,
+           adapter: adapter,
+           payload: payload,
+           access_mode: :connectrpc
+         } = stream,
+         func_name
+       ) do
+    {:ok, data} = adapter.read_body(payload)
+
+    with {:ok, request} <- decode_connect_request(codec, data, req_mod) do
+      call_with_interceptors(res_stream, func_name, stream, request)
+    end
+  end
+
   defp do_handle_request(false, res_stream, %{is_preflight?: true} = stream, func_name) do
     call_with_interceptors(res_stream, func_name, stream, [])
   end
@@ -375,6 +394,12 @@ defmodule GRPC.Server do
     {:ok, codec.decode(data, req_mod)}
   rescue
     error -> {:error, internal_error("Could not decode the request message: ", error)}
+  end
+
+  defp decode_connect_request(codec, data, req_mod) do
+    {:ok, codec.decode(data, req_mod)}
+  rescue
+    error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}
   end
 
   defp decode_stream_message!(%{codec: codec, request_mod: req_mod} = stream, flag, message) do

@@ -18,6 +18,17 @@ defmodule GRPC.Transport.HTTP2 do
     %{"content-type" => "application/grpc+#{codec_name(codec)}"}
   end
 
+  @doc """
+  The gRPC status for a response that has an HTTP status other than 200 and no
+  `grpc-status`, as in the gRPC "HTTP to gRPC status code mapping" document.
+  """
+  def status_from_http(400), do: Status.internal()
+  def status_from_http(401), do: Status.unauthenticated()
+  def status_from_http(403), do: Status.permission_denied()
+  def status_from_http(404), do: Status.unimplemented()
+  def status_from_http(status) when status in [429, 502, 503, 504], do: Status.unavailable()
+  def status_from_http(_status), do: Status.unknown()
+
   def server_trailers(status \\ Status.ok(), message \\ "", details \\ nil) do
     %{
       "grpc-status" => Integer.to_string(status),

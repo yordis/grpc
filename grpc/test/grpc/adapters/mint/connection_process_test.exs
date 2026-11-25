@@ -948,7 +948,7 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       response_state = :sys.get_state(response_pid)
 
       assert [
-               {:error, %GRPC.RPCError{status: 13, message: "status got is 502 instead of 200"}}
+               {:error, %GRPC.RPCError{status: 14, message: "status got is 502 instead of 200"}}
                | _headers
              ] = :queue.to_list(response_state.responses)
     end

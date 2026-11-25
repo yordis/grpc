@@ -397,7 +397,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
       |> consume_or_cancel_stream(
         request_ref,
         :error,
-        GRPC.RPCError.exception(GRPC.Status.internal(), "status got is #{status} instead of 200")
+        GRPC.RPCError.exception(
+          GRPC.Transport.HTTP2.status_from_http(status),
+          "status got is #{status} instead of 200"
+        )
       )
     end
 

@@ -439,29 +439,8 @@ if Code.ensure_loaded?(:gun) do
 
     defp await(response_pid, deadline) do
       case GRPC.Client.Adapters.Gun.StreamResponseProcess.await(response_pid, deadline) do
-        {:response, :fin, status, headers} ->
-          if status == 200 do
-            headers = GRPC.Transport.HTTP2.decode_headers(headers)
-            {:response, headers, :fin}
-          else
-            {:error,
-             GRPC.RPCError.exception(
-               GRPC.Status.internal(),
-               "status got is #{status} instead of 200"
-             )}
-          end
-
-        {:response, :nofin, status, headers} ->
-          if status == 200 do
-            headers = GRPC.Transport.HTTP2.decode_headers(headers)
-            {:response, headers, :nofin}
-          else
-            {:error,
-             GRPC.RPCError.exception(
-               GRPC.Status.internal(),
-               "status got is #{status} instead of 200"
-             )}
-          end
+        {:response, fin, status, headers} ->
+          response_headers(status, headers, fin)
 
         {:data, :fin, data} ->
           {:data, data}
@@ -509,6 +488,17 @@ if Code.ensure_loaded?(:gun) do
              "unexpected message when waiting for server: #{inspect(other)}"
            )}
       end
+    end
+
+    defp response_headers(200, headers, fin),
+      do: {:response, GRPC.Transport.HTTP2.decode_headers(headers), fin}
+
+    defp response_headers(status, _headers, _fin) do
+      {:error,
+       GRPC.RPCError.exception(
+         GRPC.Transport.HTTP2.status_from_http(status),
+         "status got is #{status} instead of 200"
+       )}
     end
 
     def retry_fun(retries, _opts) do

@@ -64,7 +64,8 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         compressor: compressor,
         is_preflight?: preflight?(req),
         access_mode: access_mode,
-        deadline: deadline
+        deadline: deadline,
+        timeout_ms: timeout_ms
       }
 
       server_rpc_pid = :proc_lib.spawn_link(__MODULE__, :call_rpc, [server, route, stream])

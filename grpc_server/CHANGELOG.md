@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * New `GRPC.Server.Stream.timeout_ms/1` returns the timeout the client sent, in milliseconds, or `nil`. It reads `grpc-timeout` for gRPC and gRPC-Web and `connect-timeout-ms` for Connect, so a handler or interceptor needs no header parsing. `GRPC.Server.Stream` has a new `:timeout_ms` field.
+
 ### Behavior Changes
 
   * `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. If you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.

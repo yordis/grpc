@@ -78,26 +78,17 @@ bidirectional streaming over HTTP/1.1 for the client.
 
 ## Current results
 
-Cases that pass with no known-failing list, per protocol and mode. Regenerate with
-`KNOWN_FAILING= conformance/run.sh ...`.
+Measured with empty known-failing lists on the integration branch (`KNOWN_FAILING=`):
 
 | Run | Passed | Failed | Total |
 | --- | ---: | ---: | ---: |
-| Server, gRPC (grpc.yaml limited to PROTOCOL_GRPC) | 534 | 342 | 876 |
-| Server, gRPC-Web (grpc.yaml limited to PROTOCOL_GRPC_WEB) | 700 | 620 | 1320 |
-| Client, Mint | 534 | 518 | 1052 |
-| Client, Gun | 565 | 487 | 1052 |
+| Server, `config/full.yaml` (gRPC, gRPC-Web and Connect) | 3820 | 0 | 3820 |
+| Client, `config/client.yaml`, Mint | 1052 | 0 | 1052 |
+| Client, `config/client.yaml`, Gun | 1052 | 0 | 1052 |
 
-Most failures sit in a few groups, each documented in the matching list:
-
-- JSON codec: the library JSON codec decodes to a plain map, and a gRPC JSON request is
-  answered with content-type `application/json`.
-- Message size: the receive limit is process-wide and also bounds the response.
-- Unexpected requests: wrong content-type should be 415, and unsupported or inconsistent
-  compression should be unimplemented or internal.
-- Client: response headers and trailers are missing on errors, repeated metadata keys
-  collapse, HTTP status codes are not mapped to gRPC codes, cancellation and deadlines are
-  not always reported, and compressed payloads can fail to decode.
+Every known-failing list is empty, so the lists are only comments. When a regression or a new
+feature adds failures, add them back as grouped globs with the root cause written above each
+group, and remove them as the fixes land.
 
 ## Layout
 

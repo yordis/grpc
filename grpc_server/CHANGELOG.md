@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Behavior Changes
+
+  * `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. If you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
+
 ### Bug Fixes
 
   * A server stream no longer hangs when two calls on one connection fill Cowboy's send buffers. If a stream waited for its stream buffer to drain and the connection buffer then filled, the second alarm made the stream forget it was waiting. When the buffers drained it got no ack, and the call never ended, however fast the client read (#652).

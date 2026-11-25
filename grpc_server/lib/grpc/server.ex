@@ -511,11 +511,12 @@ defmodule GRPC.Server do
     Application.get_env(:grpc, :max_message_length, Bitwise.bsl(1, 31))
   end
 
-  # The limit of a message the server sends: `:max_send_message_length`, or the limit of
-  # what it receives when that is not set.
+  # The limit of a message the server sends: `:max_send_message_length`, 2 GiB by default.
+  # It is independent of the limit of what the server receives, so a reply such as an echo
+  # with fields added is not refused because the request was near the receive limit.
   @doc false
   def max_send_message_length do
-    Application.get_env(:grpc, :max_send_message_length, max_message_length())
+    Application.get_env(:grpc, :max_send_message_length, Bitwise.bsl(1, 31))
   end
 
   defp check_message_length!(message) do

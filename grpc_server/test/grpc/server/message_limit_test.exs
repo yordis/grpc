@@ -28,10 +28,13 @@ defmodule GRPC.Server.MessageLimitTest do
   setup do
     Application.put_env(:grpc, :max_message_length, @limit)
     on_exit(fn -> Application.delete_env(:grpc, :max_message_length) end)
+    on_exit(fn -> Application.delete_env(:grpc, :max_send_message_length) end)
   end
 
   describe "sending" do
-    test "a reply over the limit fails with RESOURCE_EXHAUSTED and states the limit" do
+    test "a reply over the send limit fails with RESOURCE_EXHAUSTED and states the limit" do
+      Application.put_env(:grpc, :max_send_message_length, @limit)
+
       run_server(HelloServer, fn port ->
         assert {"8", message} = say_hello(port, "reply:#{@limit + 100}")
         assert message =~ "too large"
@@ -40,6 +43,8 @@ defmodule GRPC.Server.MessageLimitTest do
     end
 
     test "a reply under the limit succeeds" do
+      Application.put_env(:grpc, :max_send_message_length, @limit)
+
       run_server(HelloServer, fn port ->
         assert {"0", _} = say_hello(port, "reply:#{@limit - 100}")
       end)

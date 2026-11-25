@@ -65,7 +65,10 @@ defmodule GRPC.Server.SupervisorTest do
                                inactivity_timeout: :infinity,
                                max_received_frame_rate: {10_000_000, 10000},
                                max_reset_stream_rate: {10000, 10000},
-                               request_timeout: :infinity,
+                               request_timeout: 60_000,
+                               stream_window_margin_size: 0,
+                               connection_window_margin_size: 0,
+                               initial_connection_window_size: 1_048_560,
                                settings_timeout: :infinity,
                                stream_handlers: [:grpc_stream_h]
                              }

@@ -12,6 +12,7 @@ defmodule GRPC.Server.Adapters.Cowboy do
   alias GRPC.Server.Adapters.Cowboy.Handler
 
   @default_num_acceptors 20
+  @default_request_timeout 60_000
   @default_max_connections 16384
 
   @doc """
@@ -43,6 +44,11 @@ defmodule GRPC.Server.Adapters.Cowboy do
       because Cowboy has no hook before the first stream. A connection that sends no RPC is
       not closed by this option. Only Cowboy's `:idle_timeout`, which defaults to `:infinity`
       here, limits it. See the "Connection age" guide.
+    * `:request_timeout` - Milliseconds an HTTP/1.1 connection may wait for the headers of a
+      request, from the connect or from the end of the last request (default: `60000`). It does
+      not follow `:idle_timeout`, so a client that connects and sends nothing is still closed.
+      Cowboy's own default is 5000, which can close a kept-alive connection just as a client
+      reuses it. Pass `:infinity` only on a trusted network.
     * `:send_timeout` - How long `GRPC.Server.send_reply/3` waits for the client to read earlier
       replies, in milliseconds, before it raises a `:deadline_exceeded` `GRPC.RPCError`
       (default: `:infinity`). A call with a deadline waits no longer than the deadline.
@@ -286,9 +292,13 @@ defmodule GRPC.Server.Adapters.Cowboy do
           env: %{dispatch: {:persistent_term, dispatch_key}},
           idle_timeout: idle_timeout,
           inactivity_timeout: idle_timeout,
-          # For HTTP/1.1: how long a connection waits for its next request. Cowboy closes
-          # it after 5 seconds by default, when a client may be about to reuse it.
-          request_timeout: idle_timeout,
+          # For HTTP/1.1: how long a connection waits for the headers of a request, from
+          # the connect or from the end of the last request. It is the only guard against
+          # a client that connects and sends nothing, or sends headers a byte at a time,
+          # so it stays finite even when `:idle_timeout` is `:infinity`. It is well above
+          # Cowboy's 5 seconds: a client that reuses a kept-alive connection just as it
+          # closes fails with "server closed idle connection".
+          request_timeout: @default_request_timeout,
           settings_timeout: idle_timeout,
           # The flow requested up front is the initial window, and the windows are never
           # topped up beyond the flow requested, so a client cannot send a stream more
@@ -332,9 +342,7 @@ defmodule GRPC.Server.Adapters.Cowboy do
     stream_window = Map.get(opts, :initial_stream_window_size, @default_stream_window)
     window = min(@connection_window_streams * stream_window, @max_window)
 
-    opts
-    |> Map.put_new(:initial_connection_window_size, window)
-    |> Map.put_new(:connection_window_margin_size, window)
+    Map.put_new(opts, :initial_connection_window_size, window)
   end
 
   defp socket_opts(port, opts) do

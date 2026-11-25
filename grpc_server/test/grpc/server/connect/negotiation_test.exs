@@ -6,7 +6,10 @@ defmodule GRPC.Server.Connect.NegotiationTest do
   alias GRPC.Test.ConnectClient
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server,
+      service: Helloworld.Greeter.Service,
+      connect: true,
+      compressors: [GRPC.Compressor.Gzip]
 
     def say_hello(%{name: "slow"}, _stream) do
       Process.sleep(1_000)

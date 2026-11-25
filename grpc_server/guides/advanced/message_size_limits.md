@@ -8,7 +8,7 @@ says which limit it hit.
 |--------|-----------------|---------|------------|
 | `:max_message_length` | `config :grpc, max_message_length: bytes` | 2 GiB (`2_147_483_648`) | One message the server receives |
 | `:max_send_message_length` | `config :grpc, max_send_message_length: bytes` | 2 GiB (`2_147_483_648`) | One message the server sends |
-| `:max_body_size` | `GRPC.Server.Supervisor` option | 4 MiB (`4_194_304`) | The whole request body of one call. `:infinity` removes it |
+| `:max_body_size` | `GRPC.Server.Supervisor` option | 4 MiB (`4_194_304`) | The request body of a call that sends one request (unary and server streaming). On a request stream it applies only when set explicitly. `:infinity` removes it |
 | `:max_decompressed_message_length` | `config :grpc, max_decompressed_message_length: bytes` | 4 MiB | One message after gzip decompression |
 
 ## `:max_message_length`
@@ -46,8 +46,7 @@ the same limit to both. Compressed messages count by their size on the wire.
 
 ## `:max_body_size`
 
-`:max_body_size` caps the whole request body, so on a request stream it limits the
-total of all messages. Set it on the supervisor:
+`:max_body_size` caps the whole request body. Set it on the supervisor:
 
 ```elixir
 children = [
@@ -56,7 +55,11 @@ children = [
 ```
 
 The 4 MiB default applies when the option is absent or `nil`, including with
-`GRPC.Server.start_endpoint/3`. A request over it fails with `RESOURCE_EXHAUSTED` and `Request body too large`.
+`GRPC.Server.start_endpoint/3`, to a call whose request is one body: unary and
+server-streaming calls over gRPC, gRPC-Web, Connect and transcoding. A request stream
+(client-streaming and bidirectional calls) is bounded per message by `:max_message_length`,
+so a long-lived stream of small messages is not cut off. Set `:max_body_size` explicitly
+to also cap the total of a request stream. A request over the limit fails with `RESOURCE_EXHAUSTED` and `Request body too large`.
 It has to be at least as large as the biggest request you accept, so raise it
 together with `:max_message_length` for large requests.
 

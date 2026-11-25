@@ -38,7 +38,9 @@ defmodule GRPC.Server.Supervisor do
       indicating whether or not a given exception should be logged or dropped. Defaults to `nil`, which means all exceptions will be logged.
     * `:adapter_opts` - options for the adapter.
     * `:max_body_size` - the maximum size of a request body to accept in bytes, or `:infinity`.
-      Defaults to 4 MiB (`4_194_304`).
+      Defaults to 4 MiB (`4_194_304`) for a call that sends one request body (unary and
+      server streaming). A request stream (client or bidirectional streaming) is bounded per
+      message by `:max_message_length`, and only an explicit `:max_body_size` caps its total.
 
   Either `:endpoint` or `:servers` must be present, but not both.
   """

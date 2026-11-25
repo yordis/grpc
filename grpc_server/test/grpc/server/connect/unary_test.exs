@@ -4,7 +4,7 @@ defmodule GRPC.Server.Connect.UnaryTest do
   alias GRPC.Test.ConnectClient
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     def say_hello(req, stream) do
       GRPC.Server.set_headers(stream, %{"x-custom-header" => "from-server"})

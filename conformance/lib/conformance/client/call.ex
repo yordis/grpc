@@ -88,7 +88,8 @@ defmodule Conformance.Client.Call do
   defp unpack(%{request_messages: anys}, req_mod) do
     expected = req_mod.full_name()
 
-    Enum.reduce_while(anys, {:ok, []}, fn %Google.Protobuf.Any{type_url: url, value: value}, {:ok, acc} ->
+    Enum.reduce_while(anys, {:ok, []}, fn %Google.Protobuf.Any{type_url: url, value: value},
+                                          {:ok, acc} ->
       type = url |> String.split("/") |> List.last()
 
       if type == expected do
@@ -145,7 +146,9 @@ defmodule Conformance.Client.Call do
   defp codec(:CODEC_JSON), do: GRPC.Codec.JSON
   defp codec(_), do: GRPC.Codec.Proto
 
-  defp put_compressor(opts, :COMPRESSION_GZIP), do: Keyword.put(opts, :compressor, GRPC.Compressor.Gzip)
+  defp put_compressor(opts, :COMPRESSION_GZIP),
+    do: Keyword.put(opts, :compressor, GRPC.Compressor.Gzip)
+
   defp put_compressor(opts, _), do: opts
 
   defp put_cred(opts, %{server_tls_cert: <<>>}), do: opts
@@ -330,7 +333,11 @@ defmodule Conformance.Client.Call do
           {:cont, {:ok, stream}}
 
         {:error, error} ->
-          result = %{put_error(%ClientResponseResult{}, error) | num_unsent_requests: total - index}
+          result = %{
+            put_error(%ClientResponseResult{}, error)
+            | num_unsent_requests: total - index
+          }
+
           {:halt, {:error, result}}
       end
     end)
@@ -377,7 +384,9 @@ defmodule Conformance.Client.Call do
 
       {:ok, replies} ->
         consume(replies, new_result(%{}), req, 0, fn -> GRPC.Stub.cancel(stream) end)
-      {:error, error} -> put_error(%ClientResponseResult{}, error)
+
+      {:error, error} ->
+        put_error(%ClientResponseResult{}, error)
     end
   end
 
@@ -521,7 +530,11 @@ defmodule Conformance.Client.Call do
       %GRPC.RPCError{headers: headers, trailers: trailers} ->
         %{
           result
-          | response_headers: if(result.response_headers == [], do: headers(headers), else: result.response_headers),
+          | response_headers:
+              if(result.response_headers == [],
+                do: headers(headers),
+                else: result.response_headers
+              ),
             response_trailers: headers(trailers)
         }
 
@@ -534,9 +547,13 @@ defmodule Conformance.Client.Call do
     %Error{code: status, message: message, details: any_details(details)}
   end
 
-  defp to_error(%{__exception__: true} = error), do: %Error{code: @unknown, message: Exception.message(error)}
+  defp to_error(%{__exception__: true} = error),
+    do: %Error{code: @unknown, message: Exception.message(error)}
+
   defp to_error(other), do: %Error{code: @unknown, message: inspect(other)}
 
-  defp any_details(details) when is_list(details), do: Enum.filter(details, &match?(%Google.Protobuf.Any{}, &1))
+  defp any_details(details) when is_list(details),
+    do: Enum.filter(details, &match?(%Google.Protobuf.Any{}, &1))
+
   defp any_details(_), do: []
 end

@@ -37,7 +37,8 @@ defmodule GRPC.Server.Supervisor do
       This function will be called with a `GRPC.Server.Adapters.ReportException` struct and must return a boolean
       indicating whether or not a given exception should be logged or dropped. Defaults to `nil`, which means all exceptions will be logged.
     * `:adapter_opts` - options for the adapter.
-    * `:max_body_size` - the maximum message body size to accept in bytes
+    * `:max_body_size` - the maximum size of a request body to accept in bytes, or `:infinity`.
+      Defaults to 4 MiB (`4_194_304`).
 
   Either `:endpoint` or `:servers` must be present, but not both.
   """

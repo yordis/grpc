@@ -86,7 +86,6 @@ defmodule Conformance.Service do
     if definition do
       set_headers(stream, definition.response_headers)
       set_trailers(stream, definition.response_trailers)
-      if definition.response_data != [], do: GRPC.Server.send_headers(stream, %{})
 
       definition.response_data
       |> Enum.with_index()
@@ -140,10 +139,6 @@ defmodule Conformance.Service do
 
     data = (state.definition && state.definition.response_data) || []
 
-    if not state.full_duplex and data != [] do
-      GRPC.Server.send_headers(stream, %{})
-    end
-
     state =
       Enum.reduce(state.resp_num..(length(data) - 1)//1, state, fn _, state ->
         send_bidi(state, stream)
@@ -168,10 +163,6 @@ defmodule Conformance.Service do
     if definition do
       set_headers(stream, definition.response_headers)
       set_trailers(stream, definition.response_trailers)
-
-      if state.full_duplex and definition.response_data != [] do
-        GRPC.Server.send_headers(stream, %{})
-      end
     end
 
     state

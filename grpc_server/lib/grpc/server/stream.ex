@@ -17,6 +17,8 @@ defmodule GRPC.Server.Stream do
     * `:local`             - local data initialized by user
     * `:deadline`          - absolute monotonic-time (ms) by which the inbound request
       must complete, or `nil` when the caller set no deadline
+    * `:timeout_ms`        - the timeout the caller sent, in milliseconds, or `nil`;
+      see `timeout_ms/1`
   """
 
   defstruct server: nil,
@@ -34,6 +36,7 @@ defmodule GRPC.Server.Stream do
             local: nil,
             access_mode: :grpc,
             deadline: nil,
+            timeout_ms: nil,
             compressor: nil,
             is_preflight?: false,
             http_method: :post,
@@ -91,4 +94,13 @@ defmodule GRPC.Server.Stream do
 
   def remaining_ms(%__MODULE__{deadline: deadline}),
     do: max(deadline - System.monotonic_time(:millisecond), 0)
+
+  @doc """
+  The timeout the caller sent with the request, in milliseconds, or `nil` if it sent none.
+
+  It is read from `grpc-timeout` for gRPC and gRPC-Web and from `connect-timeout-ms` for
+  Connect, once, when the request arrives. It does not shrink as the call goes on. For
+  the time left, use `remaining_ms/1`.
+  """
+  def timeout_ms(%__MODULE__{timeout_ms: timeout_ms}), do: timeout_ms
 end

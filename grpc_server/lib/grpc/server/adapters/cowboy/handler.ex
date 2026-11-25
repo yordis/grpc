@@ -17,8 +17,9 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   @abort_published :"$grpc_abort_published"
 
-  # 4 MB – matches gRPC-Go's default max receive message size.
-  # Override per-server with the :max_body_size option (bytes).
+  # 4 MiB – matches gRPC-Go's default max receive message size. Override per-server with
+  # the :max_body_size option: a number of bytes, or :infinity for no limit. Without the
+  # option, or with nil, the default applies.
   @default_max_body_size 4 * 1024 * 1024
   # Cowboy's own default for how much `read_body` collects before it returns.
   @default_read_length 8_000_000
@@ -64,7 +65,8 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         compressor: compressor,
         is_preflight?: preflight?(req),
         access_mode: access_mode,
-        deadline: deadline
+        deadline: deadline,
+        timeout_ms: timeout_ms
       }
 
       server_rpc_pid = :proc_lib.spawn_link(__MODULE__, :call_rpc, [server, route, stream])
@@ -77,7 +79,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
           Process.send_after(self(), {:handling_timeout, self()}, timeout_ms)
         end
 
-      max_body_size = Map.get(opts, :max_body_size, @default_max_body_size)
+      max_body_size = Map.get(opts, :max_body_size) || @default_max_body_size
 
       {
         :cowboy_loop,
@@ -1084,7 +1086,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   defp track_body_bytes(state, body) do
     total = Map.get(state, :body_bytes_read, 0) + byte_size(body)
 
-    if total > state.max_body_size do
+    if body_too_large?(total, state.max_body_size) do
       {:too_large, total}
     else
       case scan_frames(state, body) do
@@ -1182,6 +1184,9 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   # Until the prefix is in, ask for a chunk as soon as 5 bytes are there.
+  defp body_too_large?(_size, :infinity), do: false
+  defp body_too_large?(size, max_bytes) when is_integer(max_bytes), do: size > max_bytes
+
   defp prefix_read_opts(opts, size, %{check_prefix?: true}) when size < 5,
     do: Map.put(opts, :length, 5)
 
@@ -1190,7 +1195,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   defp check_body_chunk(chunks, data, size, %{max_bytes: max_bytes, check_prefix?: check?}) do
     new_size = size + byte_size(data)
 
-    if new_size > max_bytes, do: throw({:body_too_large, new_size})
+    if body_too_large?(new_size, max_bytes), do: throw({:body_too_large, new_size})
 
     if check? and size < 5 and new_size >= 5 do
       <<_flag::8, length::32, _::binary>> = IO.iodata_to_binary([chunks, data])

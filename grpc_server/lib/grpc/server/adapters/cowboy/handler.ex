@@ -855,6 +855,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   def info({:stream_trailers, _trailers}, req, %{access_mode: :connectrpc} = state) do
+    state = reply_done(state)
     ConnectResponse.stream_trailers(req, state)
   end
 
@@ -866,12 +867,17 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     all_trailers = Map.merge(trailers, metadata)
 
+    state = reply_done(state)
     req = check_sent_resp(req)
     stream_grpcweb_trailers(req, all_trailers, state)
     :cowboy_req.stream_trailers(all_trailers, req)
 
     {:ok, req, state}
   end
+
+  # The reply is out. The RPC process may not have ended yet, so a deadline that fires
+  # now has nothing left to answer.
+  def info({:handling_timeout, _}, req, %{reply_done?: true} = state), do: {:ok, req, state}
 
   def info({:handling_timeout, _}, req, state) do
     error = %RPCError{status: GRPC.Status.deadline_exceeded(), message: "Deadline expired"}
@@ -1410,6 +1416,13 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   defp preflight?(%{method: "OPTIONS"}), do: true
   defp preflight?(_), do: false
+
+  # The call has its reply. Its deadline timer is cancelled, and a timeout message that is
+  # already in the mailbox is ignored through the flag.
+  defp reply_done(state) do
+    if state[:handling_timer], do: Process.cancel_timer(state.handling_timer)
+    Map.put(state, :reply_done?, true)
+  end
 
   defp send_error(req, error, %{access_mode: :connectrpc} = state, reason) do
     abort_rpc(state, reason)

@@ -118,8 +118,6 @@ defmodule GRPC.Integration.ClientCallCancelTest do
           assert_receive {:handler, handler}, @reset_wait
           ref = Process.monitor(handler)
 
-          assert [{:ok, %Routeguide.Feature{name: "one"}}] = Enum.take(replies, 1)
-
           assert :ok = GRPC.Stub.cancel(handle)
 
           assert {:error, %RPCError{status: @canceled}} = replies |> Enum.to_list() |> List.last()

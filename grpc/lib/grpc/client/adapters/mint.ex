@@ -48,6 +48,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     ]
     @default_transport_opts [timeout: 20_000, nodelay: true]
     @cleanup_timeout 1_000
+    @deadline_tolerance 100
     @unavailable GRPC.Status.unavailable()
 
     @doc """
@@ -311,6 +312,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
            opts
          )
          when request_type in [:client_stream, :unary] do
+      started = System.monotonic_time(:millisecond)
+
       responses =
         pid
         |> StreamResponseProcess.build_stream(true, recv_timeout(request_type, opts))
@@ -356,9 +359,33 @@ if Code.ensure_loaded?(Mint.HTTP) do
           GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
           {:error, error}
 
+        {:error, %Mint.HTTPError{reason: {:server_closed_request, :cancel}} = error} ->
+          if reset_at_deadline?(started, request_type, opts) do
+            give_up_on_request(stream, pid)
+            GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :deadline)
+
+            {:error,
+             GRPC.RPCError.exception(GRPC.Status.deadline_exceeded(), "deadline exceeded")}
+          else
+            mark_transport_failure(error)
+            {:error, rpc_error({:error, error})}
+          end
+
         {:error, error} ->
           mark_transport_failure(error)
           {:error, rpc_error({:error, error})}
+      end
+    end
+
+    # A server enforces the deadline it was sent a little after the client's own, and
+    # resets the stream with CANCEL. Next to the deadline, that reset is the deadline.
+    defp reset_at_deadline?(started, request_type, opts) do
+      case recv_timeout(request_type, opts) do
+        timeout when is_integer(timeout) ->
+          System.monotonic_time(:millisecond) - started >= timeout - @deadline_tolerance
+
+        _ ->
+          false
       end
     end
 

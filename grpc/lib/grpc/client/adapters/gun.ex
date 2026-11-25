@@ -65,6 +65,7 @@ if Code.ensure_loaded?(:gun) do
     @max_retries 100
     # Default of `:response_window`, in bytes.
     @default_response_window 1_048_576
+    @deadline_tolerance 100
     # One frame. A smaller window stalls a cowlib peer, which holds data back
     # while the stream window is under 16,384 bytes and the data does not fit.
     @min_response_window 16_384
@@ -476,11 +477,17 @@ if Code.ensure_loaded?(:gun) do
         {:error, {:connection_error, msg}} ->
           connection_error(msg)
 
+        # A server enforces the deadline it was sent a little after the client's own, and
+        # resets the stream with CANCEL. Next to the deadline, that reset is the deadline.
         {:error, {:stream_error, msg}} ->
-          GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
+          if cancel_reset?(msg) and near_deadline?(deadline) do
+            deadline_exceeded()
+          else
+            GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
 
-          {:error,
-           GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+            {:error,
+             GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+          end
 
         # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
         {:error, {reason, msg}} when reason in [:down, :noproc, :normal, :shutdown] ->
@@ -743,6 +750,14 @@ if Code.ensure_loaded?(:gun) do
         {:error,
          GRPC.RPCError.exception(status: :internal, message: "Message could not be decompressed.")}
     end
+
+    defp cancel_reset?({:stream_error, :cancel, _}), do: true
+    defp cancel_reset?(_), do: false
+
+    defp near_deadline?(deadline) when is_integer(deadline),
+      do: deadline - @deadline_tolerance <= System.monotonic_time(:millisecond)
+
+    defp near_deadline?(_), do: false
 
     defp deadline(nil), do: :infinity
     defp deadline(:infinity), do: :infinity

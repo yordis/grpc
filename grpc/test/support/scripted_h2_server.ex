@@ -22,6 +22,24 @@ defmodule GRPC.Integration.ScriptedH2Server do
 
   @preface "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
+  @doc """
+  Connects a client to the server on `port`, and disconnects it when the test ends, so
+  no connection outlives its test.
+  """
+  def connect(port, adapter, opts \\ []) do
+    {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", [adapter: adapter] ++ opts)
+
+    ExUnit.Callbacks.on_exit(fn ->
+      try do
+        GRPC.Stub.disconnect(channel)
+      catch
+        _, _ -> :ok
+      end
+    end)
+
+    channel
+  end
+
   @doc "Starts the server and returns its port. It stops with the calling test."
   def start(script, opts \\ []) do
     notify = Keyword.get(opts, :notify)

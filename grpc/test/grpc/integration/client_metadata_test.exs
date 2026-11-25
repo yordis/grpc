@@ -10,7 +10,7 @@ defmodule GRPC.Integration.ClientMetadataTest do
   end
 
   defp connect(port, adapter) do
-    {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", adapter: adapter)
+    channel = ScriptedH2Server.connect(port, adapter)
     channel
   end
 

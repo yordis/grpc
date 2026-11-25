@@ -22,13 +22,7 @@ defmodule GRPC.Integration.ClientCompressedReplyTest do
   end
 
   defp connect(port, adapter) do
-    {:ok, channel} =
-      GRPC.Stub.connect("localhost:#{port}",
-        adapter: adapter,
-        accepted_compressors: [GRPC.Compressor.Gzip]
-      )
-
-    channel
+    ScriptedH2Server.connect(port, adapter, accepted_compressors: [GRPC.Compressor.Gzip])
   end
 
   for adapter <- [Gun, Mint] do

@@ -19,7 +19,7 @@ defmodule GRPC.Integration.ClientHttpStatusTest do
   ]
 
   defp connect(port, adapter) do
-    {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", adapter: adapter)
+    channel = ScriptedH2Server.connect(port, adapter)
     channel
   end
 

@@ -53,10 +53,11 @@ if Code.ensure_loaded?(Mint.HTTP) do
       %{state | request_stream_queue: queue}
     end
 
-    def put_empty_ref_state(state, ref, response_pid, monitor_ref \\ nil) do
+    def put_empty_ref_state(state, ref, response_pid, monitor_ref \\ nil, protocol \\ :grpc) do
       put_in(state.requests[ref], %{
         stream_response_pid: response_pid,
         monitor_ref: monitor_ref,
+        protocol: protocol,
         done: false,
         response: %{}
       })
@@ -78,6 +79,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     def empty_headers?(state, ref) do
       is_nil(state.requests[ref].response[:headers])
+    end
+
+    def connect?(state, ref) do
+      state.requests[ref][:protocol] == :connect
     end
 
     def stream_response_pid(state, ref) do

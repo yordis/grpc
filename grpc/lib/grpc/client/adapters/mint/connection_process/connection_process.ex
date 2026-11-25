@@ -164,7 +164,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
           new_state =
             state
             |> State.update_conn(conn)
-            |> State.put_empty_ref_state(request_ref, stream_response_pid, monitor_ref)
+            |> State.put_empty_ref_state(
+              request_ref,
+              stream_response_pid,
+              monitor_ref,
+              opts[:protocol]
+            )
 
           emit_streams(new_state)
           {:reply, {:ok, %{request_ref: request_ref}}, new_state}
@@ -190,7 +195,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
             state
             |> State.update_conn(conn)
             |> State.update_request_stream_queue(queue)
-            |> State.put_empty_ref_state(request_ref, stream_response_pid, monitor_ref)
+            |> State.put_empty_ref_state(
+              request_ref,
+              stream_response_pid,
+              monitor_ref,
+              opts[:protocol]
+            )
 
           emit_streams(new_state)
 
@@ -289,7 +299,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
                 state
 
               _ ->
-                Enum.reduce(responses, state, &process_response/2)
+                Enum.reduce(responses, state, &route_response/2)
             end
 
           state = observe_settings(state)
@@ -382,6 +392,36 @@ if Code.ensure_loaded?(Mint.HTTP) do
       pongs = Enum.count(responses, &match?({:pong, _ref}, &1))
       %{state | pings_unacked: state.pings_unacked - pongs}
     end
+
+    # A Connect response is handed to its response process as it comes: it decides what the
+    # status and the headers mean.
+    defp route_response(response, state) do
+      ref = elem(response, 1)
+
+      if State.has_request_ref(state, ref) and State.connect?(state, ref) do
+        process_connect_response(response, state)
+      else
+        process_response(response, state)
+      end
+    end
+
+    defp process_connect_response({:status, request_ref, status}, state),
+      do: consume_or_cancel_stream(state, request_ref, :status, status)
+
+    defp process_connect_response({:headers, request_ref, headers}, state) do
+      if State.empty_headers?(state, request_ref) do
+        state
+        |> State.update_response_headers(request_ref, headers)
+        |> consume_or_cancel_stream(request_ref, :headers, headers)
+      else
+        consume_or_cancel_stream(state, request_ref, :trailers, headers)
+      end
+    end
+
+    defp process_connect_response({:data, request_ref, data}, state),
+      do: consume_or_cancel_stream(state, request_ref, :data, data)
+
+    defp process_connect_response(response, state), do: process_response(response, state)
 
     # Frames may still arrive for a stream whose state was already dropped
     # (e.g. cancelled after its response process died mid-batch). Ignore them
@@ -845,7 +885,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
                scheme,
                host,
                port,
-               Keyword.merge(opts, mode: :passive, protocols: [:http2])
+               Keyword.merge(opts,
+                 mode: :passive,
+                 protocols: Keyword.get(opts, :protocols, [:http2])
+               )
              ),
            {:ok, conn} <- await_server_preface(conn, deadline) do
         Mint.HTTP.set_mode(conn, :active)

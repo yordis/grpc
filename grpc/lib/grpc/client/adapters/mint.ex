@@ -36,6 +36,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     """
 
     alias GRPC.Channel
+    alias GRPC.Client.Connect
     alias GRPC.Client.Adapters.Mint.ConnectionProcess
     alias GRPC.Client.Adapters.Mint.StreamResponseProcess
     alias GRPC.Credential
@@ -88,6 +89,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
       :retry,
       :transport_opts,
       :client_settings,
+      :protocols,
       :keepalive,
       :keepalive_tolerance,
       :config_options,
@@ -115,9 +117,25 @@ if Code.ensure_loaded?(Mint.HTTP) do
     def send_request(%{channel: %{adapter_payload: %{conn_pid: nil}}}, _message, _opts),
       do: raise(ArgumentError, "Can't perform a request without a connection process")
 
+    def send_request(%{channel: %{protocol: :connect}} = stream, message, opts) do
+      do_request(stream, opts, connect_body(stream, message, opts))
+    end
+
     def send_request(stream, message, opts) do
       {:ok, data, _} = GRPC.Message.to_data(message, opts)
       do_request(stream, opts, data)
+    end
+
+    # A unary call sends its message as the body. The other kinds send an envelope.
+    defp connect_body(stream, message, opts) do
+      case Connect.kind(stream) do
+        :unary ->
+          Connect.unary_body(message, opts[:compressor])
+
+        :stream ->
+          {:ok, data, _} = GRPC.Message.to_data(message, opts)
+          data
+      end
     end
 
     @impl true
@@ -252,6 +270,15 @@ if Code.ensure_loaded?(Mint.HTTP) do
       ]
     end
 
+    # The gRPC protocol runs on HTTP/2 only. Connect runs on either version.
+    defp put_protocols(opts, %Channel{protocol: :connect}, protocols) when is_list(protocols),
+      do: Keyword.put(opts, :protocols, protocols)
+
+    defp put_protocols(opts, %Channel{protocol: :connect}, _protocols),
+      do: Keyword.put(opts, :protocols, [:http1, :http2])
+
+    defp put_protocols(opts, _channel, _protocols), do: opts
+
     defp mint_scheme(%Channel{scheme: "https"} = _channel), do: :https
     defp mint_scheme(_channel), do: :http
 
@@ -269,10 +296,13 @@ if Code.ensure_loaded?(Mint.HTTP) do
         adapter: __MODULE__
       }
 
+      {protocols, opts} = Keyword.pop(opts, :protocols)
+
       opts =
         channel
         |> connect_opts(opts)
         |> Keyword.merge(module_opts)
+        |> put_protocols(channel, protocols)
         |> Keyword.put(:retry, retry)
         |> Keyword.put(:notify_drain, notify_drain)
         |> Keyword.put(:grpc_transport_metadata, transport_metadata)
@@ -530,7 +560,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
            opts,
            body
          ) do
-      headers = GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
+      headers = request_headers(stream, opts)
 
       {:ok, stream_response_pid} =
         StreamResponseProcess.start_link(stream, return_headers_for_request?(stream, opts))
@@ -538,7 +568,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
       response =
         try do
           ConnectionProcess.request(pid, "POST", path, headers, body,
-            stream_response_pid: stream_response_pid
+            stream_response_pid: stream_response_pid,
+            protocol: stream.channel.protocol
           )
         catch
           :exit, reason ->
@@ -551,6 +582,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
       |> GRPC.Client.Stream.put_payload(:stream_response_pid, stream_response_pid)
       |> GRPC.Client.Stream.put_payload(:deadline, request_deadline(opts[:timeout]))
     end
+
+    defp request_headers(%{channel: %{protocol: :connect}} = stream, opts),
+      do: Connect.request_headers(stream, opts)
+
+    defp request_headers(stream, opts),
+      do: GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
 
     defp request_deadline(timeout) when is_integer(timeout),
       do: System.monotonic_time(:millisecond) + max(timeout, 0)

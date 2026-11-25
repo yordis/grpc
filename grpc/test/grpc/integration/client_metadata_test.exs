@@ -52,6 +52,27 @@ defmodule GRPC.Integration.ClientMetadataTest do
         assert trailers["x-custom-trailer"] == "one,two"
       end
 
+      test "a repeated response header and trailer of a client stream keep every value",
+           %{adapter: adapter} do
+        port =
+          ScriptedH2Server.start([
+            {:headers, @headers},
+            {:data, frame(%Routeguide.RouteSummary{point_count: 1})},
+            {:headers, @trailers, :fin}
+          ])
+
+        channel = connect(port, adapter)
+
+        stream = Routeguide.RouteGuide.Stub.record_route(channel)
+        stream = GRPC.Stub.send_request(stream, %Routeguide.Point{}, end_stream: true)
+
+        assert {:ok, %Routeguide.RouteSummary{}, %{headers: headers, trailers: trailers}} =
+                 GRPC.Stub.recv(stream, return_headers: true)
+
+        assert headers["x-custom-header"] == "foo,bar,baz"
+        assert trailers["x-custom-trailer"] == "one,two"
+      end
+
       test "a repeated response header and trailer of a server stream keep every value",
            %{adapter: adapter} do
         port =

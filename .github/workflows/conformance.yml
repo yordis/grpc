@@ -29,10 +29,22 @@ jobs:
             config: config/client.yaml
             adapter: gun
             log: client-grpc-gun
+          - name: Client gRPC-Web, Mint adapter
+            config: config/client.grpcweb.yaml
+            adapter: mint
+            log: client-grpcweb-mint
+          - name: Client gRPC-Web, Gun adapter
+            config: config/client.grpcweb.yaml
+            adapter: gun
+            log: client-grpcweb-gun
           - name: Client Connect, Mint adapter
             config: config/client.connect.yaml
             adapter: mint
             log: client-connect-mint
+          - name: Client Connect, Gun adapter
+            config: config/client.connect.yaml
+            adapter: gun
+            log: client-connect-gun
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -58,6 +70,7 @@ jobs:
         run: |
           mkdir -p logs
           ./run.sh ${{ matrix.config }} 2>&1 | tee logs/${{ matrix.log }}.log
+        shell: bash
         working-directory: ./conformance
       - name: Upload runner logs
         if: ${{ failure() }}

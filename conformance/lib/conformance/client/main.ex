@@ -104,6 +104,6 @@ defmodule Conformance.Client.Main do
   defp write(out, %ClientCompatResponse{} = response) do
     bin = ClientCompatResponse.encode(response)
 
-    Agent.get(out, fn _ -> IO.binwrite(:stdio, <<byte_size(bin)::32-big, bin::binary>>) end, :infinity)
+    Agent.get(out, fn _ -> Conformance.Protocol.write(bin) end, :infinity)
   end
 end

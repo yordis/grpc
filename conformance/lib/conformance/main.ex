@@ -16,7 +16,7 @@ defmodule Conformance.Main do
 
     response = %ServerCompatResponse{host: "127.0.0.1", port: port, pem_cert: pem_cert}
     bin = ServerCompatResponse.encode(response)
-    :ok = IO.binwrite(:stdio, <<byte_size(bin)::32-big, bin::binary>>)
+    :ok = Conformance.Protocol.write(bin)
   end
 
   defp read_request do

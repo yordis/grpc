@@ -23,6 +23,7 @@ defmodule GRPC.Client.Connect.Response do
     :response_mod,
     :status,
     :headers,
+    compressors: [],
     body: <<>>
   ]
 
@@ -30,7 +31,9 @@ defmodule GRPC.Client.Connect.Response do
     %__MODULE__{
       kind: Connect.kind(stream),
       codec: stream.codec,
-      response_mod: stream.response_mod
+      response_mod: stream.response_mod,
+      compressors:
+        Enum.uniq(Enum.reject([stream.compressor | stream.accepted_compressors], &is_nil/1))
     }
   end
 
@@ -46,10 +49,15 @@ defmodule GRPC.Client.Connect.Response do
   def consume(response, {:data, data}), do: {%{response | body: response.body <> data}, [], :ok}
 
   def consume(%{kind: :unary, status: 200} = response, :done) do
-    {:ok, reply} =
-      GRPC.Client.ReplyDecoder.decode(response.codec, response.body, response.response_mod)
+    trailers = {:trailers, trailers(response.headers)}
 
-    {response, [{:ok, reply}, {:trailers, trailers(response.headers)}], :ok}
+    with {:ok, body} <- decompress(response, "content-encoding", response.body),
+         {:ok, reply} <-
+           GRPC.Client.ReplyDecoder.decode(response.codec, body, response.response_mod) do
+      {response, [{:ok, reply}, trailers], :ok}
+    else
+      {:error, error} -> {response, [trailers, {:error, error}], :ok}
+    end
   end
 
   def consume(%{kind: :unary} = response, :done) do
@@ -107,6 +115,31 @@ defmodule GRPC.Client.Connect.Response do
   end
 
   defp decode_value(_value), do: :error
+
+  # Identity, or a compressor the caller listed.
+  defp decompress(response, header, body) do
+    case header_value(response.headers, header) do
+      encoding when encoding in [nil, "", "identity"] ->
+        {:ok, body}
+
+      encoding ->
+        case Enum.find(response.compressors, &(&1.name() == encoding)) do
+          nil ->
+            {:error,
+             GRPC.RPCError.exception(
+               GRPC.Status.internal(),
+               "Unsupported #{header} #{inspect(encoding)} in the response"
+             )}
+
+          compressor ->
+            {:ok, compressor.decompress(body)}
+        end
+    end
+  end
+
+  defp header_value(headers, name) do
+    Enum.find_value(headers, fn {key, value} -> if key == name, do: value end)
+  end
 
   defp response_headers(headers) do
     headers

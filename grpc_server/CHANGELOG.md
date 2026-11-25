@@ -12,6 +12,8 @@
 
 ### Bug Fixes
 
+  * An HTTP/1.1 connection that sends no request is closed again, after 60 seconds. The adapter had set Cowboy's `request_timeout` to `:idle_timeout`, which defaults to `:infinity`, so idle sockets lived forever and could fill `:max_connections`. The `:request_timeout` adapter option (default `60000`) is independent of `:idle_timeout`. The default is above Cowboy's 5 seconds on purpose, so a client that reuses a kept-alive connection does not hit a close. Upgrade note: set `adapter_opts: [request_timeout: ...]` to change it, or `:infinity` to restore the previous behavior.
+
   * The default `:max_body_size` (4 MiB) no longer cuts off a long-lived client-streaming or bidirectional call once its messages add up to 4 MiB. The default applies only to a call whose request is one body (unary and server streaming, over gRPC, gRPC-Web, Connect and transcoding). A request stream is bounded per message by `:max_message_length`. An explicit `:max_body_size` still caps the total of a request stream. Upgrade note: if you set `:max_body_size` only to cap a stream's total, it still does; if you relied on the unreleased default to cap streams, set `:max_body_size` explicitly.
 
   * The 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. A server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size` (a behavior change).

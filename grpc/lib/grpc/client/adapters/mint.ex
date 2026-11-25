@@ -318,12 +318,28 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       case check_for_error(responses) do
         :ok ->
-          data = Keyword.fetch!(responses, :ok)
+          case Keyword.get_values(responses, :ok) do
+            [data] ->
+              if opts[:return_headers] do
+                {:ok, data, get_headers_and_trailers(responses)}
+              else
+                {:ok, data}
+              end
 
-          if opts[:return_headers] do
-            {:ok, data, get_headers_and_trailers(responses)}
-          else
-            {:ok, data}
+            [] ->
+              GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+              {:error,
+               GRPC.RPCError.exception(GRPC.Status.unimplemented(), "Missing response message.")}
+
+            _several ->
+              GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+              {:error,
+               GRPC.RPCError.exception(
+                 GRPC.Status.unimplemented(),
+                 "Received more than one message for a call that returns one."
+               )}
           end
 
         {:error, :deadline_exceeded} ->

@@ -411,7 +411,21 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp process_response({:headers, request_ref, headers}, state) do
       if State.empty_headers?(state, request_ref) do
         new_state = State.update_response_headers(state, request_ref, headers)
-        consume_or_cancel_stream(new_state, request_ref, :headers, headers)
+        content_type = headers |> GRPC.Transport.HTTP2.decode_headers() |> Map.get("content-type")
+
+        if GRPC.Transport.HTTP2.grpc_content_type?(content_type) do
+          consume_or_cancel_stream(new_state, request_ref, :headers, headers)
+        else
+          error =
+            GRPC.RPCError.exception(
+              GRPC.Status.unknown(),
+              "Unexpected content-type: #{inspect(content_type)}"
+            )
+
+          new_state
+          |> consume_or_cancel_stream(request_ref, :error, error)
+          |> cancel_refused_stream(request_ref)
+        end
       else
         consume_or_cancel_stream(state, request_ref, :trailers, headers)
       end

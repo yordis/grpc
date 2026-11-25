@@ -29,6 +29,14 @@ defmodule GRPC.Transport.HTTP2 do
   def status_from_http(status) when status in [429, 502, 503, 504], do: Status.unavailable()
   def status_from_http(_status), do: Status.unknown()
 
+  @doc """
+  Whether a response `content-type` is one of gRPC. A response without one is
+  accepted, since some servers omit it from a trailers-only reply.
+  """
+  def grpc_content_type?(nil), do: true
+  def grpc_content_type?("application/grpc" <> _), do: true
+  def grpc_content_type?(_content_type), do: false
+
   def server_trailers(status \\ Status.ok(), message \\ "", details \\ nil) do
     %{
       "grpc-status" => Integer.to_string(status),

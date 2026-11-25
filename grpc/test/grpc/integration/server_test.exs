@@ -399,6 +399,7 @@ defmodule GRPC.Integration.ServerTest do
     run_server([FeatureErrorServer], fn port ->
       {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
       rect = %Routeguide.Rectangle{}
+
       assert {:error, %GRPC.RPCError{message: "Please authenticate", status: 16}} =
                channel |> Routeguide.RouteGuide.Stub.list_features(rect)
     end)
@@ -419,9 +420,7 @@ defmodule GRPC.Integration.ServerTest do
       run_server([TimeoutServer], fn port ->
         {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
         rect = %Routeguide.Rectangle{}
-        error = %GRPC.RPCError{message: "Deadline expired", status: 4}
-
-        assert {:error, ^error} =
+        assert {:error, %GRPC.RPCError{message: "Deadline expired", status: 4}} =
                  channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 50)
       end)
     end)

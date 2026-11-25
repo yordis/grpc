@@ -350,7 +350,10 @@ if Code.ensure_loaded?(:gun) do
 
       case recv_headers(payload, deadline) do
         {:ok, headers, :fin} ->
-          handle_fin_response(headers, opts)
+          # Trailers only: a status OK means the call returned no message.
+          with :ok <- parse_trailers(headers, nil) do
+            {:error, no_response_error(nil, headers)}
+          end
 
         {:ok, headers, :nofin} ->
           handle_nofin_response(payload, stream, headers, opts, deadline)
@@ -493,8 +496,19 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
-    defp response_headers(200, headers, fin),
-      do: {:response, GRPC.Transport.HTTP2.decode_headers(headers), fin}
+    defp response_headers(200, headers, fin) do
+      headers = GRPC.Transport.HTTP2.decode_headers(headers)
+
+      if GRPC.Transport.HTTP2.grpc_content_type?(headers["content-type"]) do
+        {:response, headers, fin}
+      else
+        {:error,
+         GRPC.RPCError.exception(
+           GRPC.Status.unknown(),
+           "Unexpected content-type: #{inspect(headers["content-type"])}"
+         )}
+      end
+    end
 
     defp response_headers(status, _headers, _fin) do
       {:error,
@@ -795,18 +809,44 @@ if Code.ensure_loaded?(:gun) do
       with :ok <- parse_trailers(trailers, headers),
            compressor <- get_compressor(headers, accepted_compressors),
            body <- get_body(codec, body),
+           :ok <- check_has_message(body, headers, trailers),
            :ok <- GRPC.Client.MessageLimit.check_prefix(body),
-           {:ok, msg, remaining} <- GRPC.Message.from_data(%{compressor: compressor}, body) do
-        {:ok, codec.decode(msg, res_mod), check_for_trailers(remaining, compressor)}
+           {:ok, msg, remaining} <- GRPC.Message.from_data(%{compressor: compressor}, body),
+           {:ok, embedded_trailers} <- check_for_trailers(remaining, compressor) do
+        {:ok, codec.decode(msg, res_mod), embedded_trailers}
       end
     end
 
-    defp check_for_trailers(<<>>, _compressor), do: %{}
+    # A call that returns one message did not, though its status is OK.
+    defp check_has_message(<<>>, headers, trailers),
+      do: {:error, no_response_error(headers, trailers)}
+
+    defp check_has_message(_body, _headers, _trailers), do: :ok
+
+    defp no_response_error(headers, trailers) do
+      error =
+        GRPC.RPCError.exception(GRPC.Status.unimplemented(), "Missing response message.")
+
+      %{error | headers: headers, trailers: trailers}
+    end
+
+    defp check_for_trailers(<<>>, _compressor), do: {:ok, %{}}
 
     defp check_for_trailers(body, compressor) do
       case GRPC.Message.from_data(%{compressor: compressor}, body) do
-        {:trailers, trailers, <<>>} -> trailers
-        _ -> %{}
+        {:trailers, trailers, <<>>} ->
+          {:ok, trailers}
+
+        _ when binary_part(body, 0, 1) == <<128>> ->
+          # A trailers frame that cannot be read: the status is checked elsewhere.
+          {:ok, %{}}
+
+        _ ->
+          {:error,
+           GRPC.RPCError.exception(
+             GRPC.Status.unimplemented(),
+             "Received more than one message for a call that returns one."
+           )}
       end
     end
 
@@ -820,6 +860,8 @@ if Code.ensure_loaded?(:gun) do
           stream
           |> Map.put(:fin, true)
           |> Map.put(:fin_resp, fin_resp)
+          |> Map.put(:ended, true)
+          |> Map.put(:need_more, false)
           |> read_stream()
 
         error ->

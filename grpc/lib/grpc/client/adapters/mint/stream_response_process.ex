@@ -190,7 +190,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
     state = %{
       state
       | responses: new_responses,
-        terminated: state.terminated or terminal?(response)
+        terminated: state.terminated || terminal?(response)
     }
 
     {:reply, :ok, state, {:continue, :produce_response}}
@@ -205,7 +205,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
     state = update_compressor({type, headers}, state)
     response = get_headers_response(headers, type, response_headers_for(type, state))
     state = remember_headers(response, state)
-    state = %{state | terminated: state.terminated or terminal?(response)}
+    state = %{state | terminated: state.terminated || terminal?(response)}
 
     case response do
       {:error, _rpc_error} = error ->
@@ -234,6 +234,20 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # The stream ended. Without a `grpc-status` or an error the call did not complete.
   def handle_call({:consume_response, :done}, _from, %{terminated: false} = state) do
     error = {:error, %{missing_status_error(state.buffer) | headers: Map.get(state, :headers)}}
+    responses = :queue.in(error, state.responses)
+
+    {:reply, :ok, %{state | responses: responses, terminated: true, done: true},
+     {:continue, :produce_response}}
+  end
+
+  # The trailers came while a message was still incomplete.
+  def handle_call(
+        {:consume_response, :done},
+        _from,
+        %{terminated: :status, buffer: buffer} = state
+      )
+      when buffer != <<>> do
+    error = {:error, %{missing_status_error(buffer) | headers: Map.get(state, :headers)}}
     responses = :queue.in(error, state.responses)
 
     {:reply, :ok, %{state | responses: responses, terminated: true, done: true},
@@ -364,7 +378,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
   # An error, or headers carrying a `grpc-status`, end the response.
   defp terminal?({:error, _}), do: true
-  defp terminal?({_type, %{"grpc-status" => _}}), do: true
+  defp terminal?({_type, %{"grpc-status" => _}}), do: :status
   defp terminal?(_response), do: false
 
   defp missing_status_error(<<>>) do

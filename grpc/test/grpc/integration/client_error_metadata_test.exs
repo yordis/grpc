@@ -41,7 +41,9 @@ defmodule GRPC.Integration.ClientErrorMetadataTest do
       @describetag adapter: adapter
 
       test "a unary error carries the response headers and the trailers", %{adapter: adapter} do
-        port = ScriptedH2Server.start([{:headers, @ok_headers}, {:headers, @error_trailers, :fin}])
+        port =
+          ScriptedH2Server.start([{:headers, @ok_headers}, {:headers, @error_trailers, :fin}])
+
         channel = connect(port, adapter)
 
         assert {:error, %GRPC.RPCError{} = error} =
@@ -70,7 +72,9 @@ defmodule GRPC.Integration.ClientErrorMetadataTest do
 
       test "a server stream error carries the response headers and the trailers",
            %{adapter: adapter} do
-        port = ScriptedH2Server.start([{:headers, @ok_headers}, {:headers, @error_trailers, :fin}])
+        port =
+          ScriptedH2Server.start([{:headers, @ok_headers}, {:headers, @error_trailers, :fin}])
+
         channel = connect(port, adapter)
 
         error =

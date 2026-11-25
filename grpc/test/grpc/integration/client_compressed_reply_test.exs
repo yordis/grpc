@@ -10,7 +10,11 @@ defmodule GRPC.Integration.ClientCompressedReplyTest do
   end
 
   defp script(messages) do
-    headers = [{":status", "200"}, {"content-type", "application/grpc"}, {"grpc-encoding", "gzip"}]
+    headers = [
+      {":status", "200"},
+      {"content-type", "application/grpc"},
+      {"grpc-encoding", "gzip"}
+    ]
 
     [{:headers, headers}] ++
       Enum.map(messages, &{:data, gzipped(&1)}) ++

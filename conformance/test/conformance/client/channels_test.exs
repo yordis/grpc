@@ -6,8 +6,10 @@ defmodule Conformance.Client.ChannelsTest do
   alias Conformance.Client.Channels
 
   # Stands in for `GRPC.Stub.connect/2`: counts connects and answers with what `reply` says.
-  # `ready` stands in for `GRPC.Client.Connection.await_ready/2`.
+  # `ready` stands in for `GRPC.Client.Connection.await_ready/2`, and the test process for
+  # the connection process of every channel.
   defp start_channels(reply \\ fn n -> {:ok, {:channel, n}} end, ready \\ fn _ -> :ok end) do
+    test = self()
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
     connect = fn addr, opts ->
@@ -16,7 +18,9 @@ defmodule Conformance.Client.ChannelsTest do
       reply.(n)
     end
 
-    {:ok, channels} = Channels.start_link(connect: connect, ready: ready)
+    {:ok, channels} =
+      Channels.start_link(connect: connect, ready: ready, connection: fn _ -> test end)
+
     channels
   end
 

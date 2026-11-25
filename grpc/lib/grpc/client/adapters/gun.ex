@@ -372,7 +372,8 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp handle_streaming_nofin_response(stream, headers, opts, deadline) do
-      response = response_stream(:nofin, stream, opts, deadline)
+      compressor = get_compressor(headers, stream.accepted_compressors)
+      response = response_stream(:nofin, stream, opts, deadline, compressor)
 
       if opts[:return_headers] do
         {:ok, response, %{headers: headers}}
@@ -585,7 +586,8 @@ if Code.ensure_loaded?(:gun) do
              payload: payload
            } = stream,
            opts,
-           deadline
+           deadline,
+           compressor
          ) do
       state = %{
         payload: payload,
@@ -596,6 +598,7 @@ if Code.ensure_loaded?(:gun) do
         opts: opts,
         response_mod: res_mod,
         codec: codec,
+        compressor: compressor,
         deadline: deadline
       }
 
@@ -632,10 +635,16 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp read_stream(
-           %{buffer: buffer, need_more: false, response_mod: res_mod, codec: codec, opts: opts} =
-             stream
+           %{
+             buffer: buffer,
+             need_more: false,
+             response_mod: res_mod,
+             codec: codec,
+             compressor: compressor,
+             opts: opts
+           } = stream
          ) do
-      case get_message(buffer) do
+      case get_message(buffer, compressor) do
         {:error, _} = error ->
           # The rest of the message is not read: reset the stream.
           cancel(stream.stream)
@@ -662,12 +671,27 @@ if Code.ensure_loaded?(:gun) do
     # A message over `:max_message_length` ends the stream with an error item.
     # The prefix is checked here, as newer `GRPC.Message.get_message/1` does, and
     # that function raises for it.
-    defp get_message(buffer) do
+    defp get_message(buffer, compressor) do
       with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer) do
-        GRPC.Message.get_message(buffer)
+        case GRPC.Message.get_message(buffer, compressor) do
+          {{1, _message}, _rest} when is_nil(compressor) ->
+            {:error,
+             GRPC.RPCError.exception(
+               status: :internal,
+               message: "Compressed flag is set, but not specified in headers."
+             )}
+
+          other ->
+            other
+        end
       end
     rescue
-      error in GRPC.RPCError -> {:error, error}
+      error in GRPC.RPCError ->
+        {:error, error}
+
+      _ ->
+        {:error,
+         GRPC.RPCError.exception(status: :internal, message: "Message could not be decompressed.")}
     end
 
     defp deadline(nil), do: :infinity

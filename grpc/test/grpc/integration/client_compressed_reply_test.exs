@@ -1,5 +1,5 @@
 defmodule GRPC.Integration.ClientCompressedReplyTest do
-  use GRPC.Integration.TestCase, async: true
+  use ExUnit.Case, async: true
 
   alias GRPC.Client.Adapters.{Gun, Mint}
   alias GRPC.Integration.ScriptedH2Server

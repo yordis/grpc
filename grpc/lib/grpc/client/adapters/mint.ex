@@ -118,7 +118,11 @@ if Code.ensure_loaded?(Mint.HTTP) do
       do: raise(ArgumentError, "Can't perform a request without a connection process")
 
     def send_request(%{channel: %{protocol: :connect}} = stream, message, opts) do
-      do_request(stream, opts, connect_body(stream, message, opts))
+      if opts[:http_method] == :get and Connect.kind(stream) == :unary do
+        do_request(%{stream | path: Connect.get_path(stream, message, opts)}, opts, nil, "GET")
+      else
+        do_request(stream, opts, connect_body(stream, message, opts))
+      end
     end
 
     def send_request(stream, message, opts) do
@@ -558,16 +562,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp do_request(
            %{channel: %{adapter_payload: %{conn_pid: pid}}, path: path} = stream,
            opts,
-           body
+           body,
+           method \\ "POST"
          ) do
-      headers = request_headers(stream, opts)
+      headers = request_headers(stream, opts, method)
 
       {:ok, stream_response_pid} =
         StreamResponseProcess.start_link(stream, return_headers_for_request?(stream, opts))
 
       response =
         try do
-          ConnectionProcess.request(pid, "POST", path, headers, body,
+          ConnectionProcess.request(pid, method, path, headers, body,
             stream_response_pid: stream_response_pid,
             protocol: stream.channel.protocol
           )
@@ -583,10 +588,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
       |> GRPC.Client.Stream.put_payload(:deadline, request_deadline(opts[:timeout]))
     end
 
-    defp request_headers(%{channel: %{protocol: :connect}} = stream, opts),
-      do: Connect.request_headers(stream, opts)
+    defp request_headers(%{channel: %{protocol: :connect}} = stream, opts, method),
+      do: Connect.request_headers(stream, opts, method)
 
-    defp request_headers(stream, opts),
+    defp request_headers(stream, opts, _method),
       do: GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
 
     defp request_deadline(timeout) when is_integer(timeout),

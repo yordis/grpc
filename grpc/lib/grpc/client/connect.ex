@@ -14,15 +14,15 @@ defmodule GRPC.Client.Connect do
   def kind(_stream), do: :stream
 
   @doc "The request headers of a call, without the pseudo headers."
-  def request_headers(stream, opts) do
+  def request_headers(stream, opts, method \\ "POST") do
     kind = kind(stream)
 
     [
-      {"content-type", content_type(kind, stream.codec)},
       {"connect-protocol-version", "1"},
       {"user-agent", GRPC.Core.user_agent()}
     ]
-    |> append_compression(kind, stream.compressor, stream.accepted_compressors)
+    |> append_content_type(method, kind, stream.codec)
+    |> append_compression(kind, method, stream.compressor, stream.accepted_compressors)
     |> append_timeout(opts[:timeout])
     |> append_metadata(stream.channel.headers)
     |> append_metadata(stream.headers)
@@ -37,17 +37,49 @@ defmodule GRPC.Client.Connect do
   defp codec_name(%{name: name}), do: name
 
   @doc "The body of a unary call: the message, compressed as a whole when there is a compressor."
-  def unary_body(message, nil), do: message
-  def unary_body(message, compressor), do: compressor.compress(message)
+  def unary_body(message, nil), do: IO.iodata_to_binary(message)
 
-  defp append_compression(headers, kind, compressor, accepted) do
+  def unary_body(message, compressor),
+    do: compressor.compress(IO.iodata_to_binary(message))
+
+  # A GET has no body to type.
+  defp append_content_type(headers, "GET", _kind, _codec), do: headers
+
+  defp append_content_type(headers, _method, kind, codec),
+    do: [{"content-type", content_type(kind, codec)} | headers]
+
+  @doc """
+  The path of a GET call, with the Connect query: the message is the URL-safe base64 of the
+  body, compressed when there is a compressor.
+  """
+  def get_path(stream, message, opts) do
+    compressor = opts[:compressor] || stream.compressor
+
+    query =
+      [
+        {"connect", "v1"},
+        {"encoding", codec_name(stream.codec)},
+        {"message", Base.url_encode64(unary_body(message, compressor), padding: false)},
+        {"base64", "1"}
+      ]
+      |> then(fn query ->
+        if compressor, do: query ++ [{"compression", compressor.name()}], else: query
+      end)
+
+    stream.path <> "?" <> URI.encode_query(query)
+  end
+
+  defp append_compression(headers, kind, method, compressor, accepted) do
     {encoding, accept} =
       case kind do
         :unary -> {"content-encoding", "accept-encoding"}
         :stream -> {"connect-content-encoding", "connect-accept-encoding"}
       end
 
-    headers = if compressor, do: [{encoding, compressor.name()} | headers], else: headers
+    headers =
+      if compressor && method == "POST",
+        do: [{encoding, compressor.name()} | headers],
+        else: headers
 
     case Enum.map(accepted, & &1.name()) do
       [] -> headers

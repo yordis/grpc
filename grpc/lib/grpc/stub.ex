@@ -109,6 +109,9 @@ defmodule GRPC.Stub do
     * `:compressor` - the compressor for this call. It overrides the one set in `connect/2`.
     * `:accepted_compressors` - the compressors you accept in the reply, as a list.
     * `:codec` - the codec for this call. It overrides the one set in `connect/2`.
+    * `:http_method` - `:get` sends a unary call of a channel with `protocol: :connect` as an
+      HTTP GET, with the message in the query. Only a method marked `NO_SIDE_EFFECTS` takes
+      it. Default is `:post`.
 
   Any other option raises `ArgumentError`.
 
@@ -1164,7 +1167,8 @@ defmodule GRPC.Stub do
     :grpc_encoding,
     :metadata,
     :codec,
-    :return_headers
+    :return_headers,
+    :http_method
   ]
   defp parse_req_opts(opts) when is_list(opts) do
     # Map.new is used so we can keep the last value

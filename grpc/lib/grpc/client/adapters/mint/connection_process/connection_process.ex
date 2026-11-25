@@ -152,11 +152,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     def handle_call(
-          {:request, method, path, headers, :stream, opts},
+          {:request, method, path, headers, stream_or_nil, opts},
           _from,
           state
-        ) do
-      case Mint.HTTP.request(state.conn, method, path, headers, :stream) do
+        )
+        when stream_or_nil in [:stream, nil] do
+      case Mint.HTTP.request(state.conn, method, path, headers, stream_or_nil) do
         {:ok, conn, request_ref} ->
           stream_response_pid = opts[:stream_response_pid]
           monitor_ref = if is_pid(stream_response_pid), do: Process.monitor(stream_response_pid)

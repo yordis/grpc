@@ -126,7 +126,8 @@ defmodule GRPC.Server.Http1KeepAliveTest do
          headers,
          first_chunk,
          path \\ @path,
-         second_chunk \\ ""
+         second_chunk \\ "",
+         next_path \\ nil
        ) do
     {:ok, socket} = :gen_tcp.connect(~c"localhost", port, [:binary, active: false])
 
@@ -159,7 +160,7 @@ defmodule GRPC.Server.Http1KeepAliveTest do
     :ok =
       :gen_tcp.send(
         socket,
-        "POST #{path} HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n" <>
+        "POST #{next_path || path} HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n" <>
           "connect-protocol-version: 1\r\ncontent-length: 15\r\n\r\n{\"name\":\"next\"}"
       )
 
@@ -195,6 +196,27 @@ defmodule GRPC.Server.Http1KeepAliveTest do
           unquote(content_type),
           unquote(headers),
           unquote(body)
+        )
+      end)
+    end
+  end
+
+  # The router answers a path no service serves before any handler runs.
+  for {name, content_type, headers} <- [
+        {"connect", "application/json", [{"connect-protocol-version", "1"}]},
+        {"grpc-web", "application/grpc-web+proto", []},
+        {"grpc", "application/grpc+proto", []}
+      ] do
+    test "the connection stays open after an unknown method (#{name}), with the request body still streaming" do
+      run_server(HelloServer, fn port ->
+        assert_kept_alive_while_streaming(
+          port,
+          unquote(content_type),
+          unquote(headers),
+          "{}",
+          "/unknown.Service/Method",
+          "",
+          @path
         )
       end)
     end

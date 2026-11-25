@@ -32,6 +32,27 @@ defmodule Conformance.LauncherTest do
              Connectrpc.Conformance.V1.ServerCompatResponse.decode(response)
   end
 
+  # The device behind stdin starts out decoding UTF-8, and anything that sets its options can
+  # put it back, which mangles bytes over 127 or fails the read. The protocol is bytes, so it
+  # must not pass through that device. This program never sets the device to bytes.
+  test "protocol bytes arrive intact whatever encoding the stdin device is in" do
+    expression = """
+    unicode = :io.getopts(:standard_io)[:encoding]
+    input = Conformance.Protocol.open_input()
+    message = Conformance.Protocol.read(input)
+    Conformance.Protocol.write(<<unicode == :unicode>> <> message)
+    System.halt(0)
+    """
+
+    # Every byte value, which is not valid UTF-8, then a short second message.
+    payload = :binary.list_to_bin(Enum.to_list(0..255))
+    program = start(Path.join(@bin, "launch"), [expression])
+    Port.command(program, <<byte_size(payload)::32-big, payload::binary>>)
+
+    assert <<size::32-big, response::binary-size(size)>> = handshake(program)
+    assert response == <<1>> <> payload
+  end
+
   # Takes the lock the way a compile does and keeps it until the test process ends.
   defp hold_build_lock do
     holder = start_mix("Mix.Project.with_build_lock(fn -> IO.puts(\"locked\"); IO.gets(\"\") end)")

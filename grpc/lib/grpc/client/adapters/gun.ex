@@ -18,6 +18,14 @@ if Code.ensure_loaded?(:gun) do
 
     Options in `:adapter_opts` that this adapter reads itself, besides the ones Gun takes:
 
+      * `:protocols` - for `protocol: :connect` and `protocol: :grpc_web`, a non-empty list of
+        the HTTP versions to allow, from `:http1` and `:http2` (not Gun's own names). With
+        `https://` the version is negotiated with ALPN, and the default allows both. With
+        `http://` there is no negotiation: the adapter speaks HTTP/2 with prior knowledge
+        unless the list is `[:http1]`. `protocol: :grpc` runs on HTTP/2 only and takes no
+        `:protocols` other than `[:http2]`. The Mint adapter reads the same option the
+        same way.
+
       * `:response_window` - bytes of a response the adapter reads ahead of the
         caller, per stream (default: `1_048_576`). The least value is `16_384`, one
         HTTP/2 frame. Gun counts the window in DATA frames, `ceil(window / 16_384)`
@@ -72,6 +80,14 @@ if Code.ensure_loaded?(:gun) do
     @min_response_window 16_384
     # The HTTP/2 default connection window. cowlib crashes below it.
     @min_connection_window 65_535
+
+    @impl true
+    def supported_protocols, do: [:grpc, :connect, :grpc_web]
+
+    @impl true
+    def validate_opts(opts, protocol) when is_list(opts) do
+      with :ok <- validate_opts(opts), do: GRPC.Client.HTTPVersions.validate(protocol, opts)
+    end
 
     @impl true
     def validate_opts(opts) when is_list(opts) do
@@ -183,23 +199,16 @@ if Code.ensure_loaded?(:gun) do
       do_connect(channel, open_opts)
     end
 
-    # The gRPC protocol runs on HTTP/2 only. Connect and gRPC-Web run on either version,
-    # `:http1` and `:http2` as the Mint adapter names them, and Gun opens a plain TCP
-    # connection with one.
-    defp protocols(%{protocol: protocol}, opts, transport)
-         when protocol in [:connect, :grpc_web] do
-      protocols =
-        opts
-        |> Map.get(:protocols, [:http1, :http2])
-        |> Enum.map(fn
-          :http1 -> :http
-          protocol -> protocol
-        end)
-
-      if transport == :tcp, do: Enum.take(protocols, 1), else: protocols
+    # See `GRPC.Client.HTTPVersions` for how the version is picked. The versions are named
+    # `:http1` and `:http2` as the Mint adapter names them, Gun calls the first `:http`.
+    defp protocols(%{protocol: protocol}, opts, transport) do
+      protocol
+      |> GRPC.Client.HTTPVersions.select(Map.get(opts, :protocols), transport)
+      |> Enum.map(fn
+        :http1 -> :http
+        version -> version
+      end)
     end
-
-    defp protocols(_channel, _opts, _transport), do: [:http2]
 
     defp do_connect(channel, open_opts) do
       # `:retry` and `:retry_fun` given in `:adapter_opts` take precedence.

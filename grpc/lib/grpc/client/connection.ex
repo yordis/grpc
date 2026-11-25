@@ -264,8 +264,14 @@ defmodule GRPC.Client.Connection do
     * `:protocol` – the wire protocol of the calls, `:grpc` (default), `:connect` or
       `:grpc_web`. `:connect` speaks the [Connect protocol](https://connectrpc.com/docs/protocol)
       and `:grpc_web` the [gRPC-Web protocol](https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md).
-      Both need the Mint or the Gun adapter and run over HTTP/1.1 and HTTP/2
-      (`adapter_opts: [protocols: [:http1, :http2]]`).
+      Both need an adapter that speaks them (`GRPC.Client.Adapters.Mint` and
+      `GRPC.Client.Adapters.Gun` do, see `c:GRPC.Client.Adapter.supported_protocols/0`) and run
+      over HTTP/2 or HTTP/1.1. The adapter option `:protocols` lists the versions to allow.
+      With `https://` the version is negotiated with ALPN and both are allowed by default.
+      With `http://` there is no negotiation: the client speaks HTTP/2 with prior knowledge
+      (h2c), as a gRPC client does, and HTTP/1.1 only with `adapter_opts: [protocols: [:http1]]`.
+      A list with both versions is HTTP/2 on `http://`. HTTP/1.1 carries one call at a time per
+      connection, and a call that streams both ways is half-duplex on it.
     * `:compressor` / `:accepted_compressors` – message compression
     * `:headers` – default metadata headers
     * `:max_receive_message_length` – the largest reply message, in bytes, that
@@ -1314,8 +1320,8 @@ defmodule GRPC.Client.Connection do
     resolver = Keyword.get(opts, :resolver, GRPC.Client.Resolver)
     adapter = Keyword.get(opts, :adapter, GRPC.Client.Adapters.Gun)
 
-    validate_adapter_opts!(adapter, opts[:adapter_opts])
     validate_protocol!(opts[:protocol], adapter)
+    validate_adapter_opts!(adapter, opts[:adapter_opts], opts[:protocol])
 
     {norm_target, norm_opts, scheme} = normalize_target_and_opts(target, opts)
     cred = resolve_credential(norm_opts[:cred], scheme)
@@ -1354,17 +1360,16 @@ defmodule GRPC.Client.Connection do
   defp resolve_credential(nil, _scheme), do: nil
   defp resolve_credential(other, _scheme), do: other
 
-  defp validate_protocol!(:grpc, _adapter), do: :ok
+  defp validate_protocol!(protocol, adapter) when protocol in [:grpc, :connect, :grpc_web] do
+    supported = supported_protocols(adapter)
 
-  defp validate_protocol!(protocol, adapter)
-       when protocol in [:connect, :grpc_web] and
-              adapter in [GRPC.Client.Adapters.Mint, GRPC.Client.Adapters.Gun],
-       do: :ok
+    if protocol not in supported do
+      raise ArgumentError,
+            "the #{inspect(protocol)} protocol is not supported by the #{inspect(adapter)} " <>
+              "adapter, it supports: #{inspect(supported)}"
+    end
 
-  defp validate_protocol!(protocol, adapter) when protocol in [:connect, :grpc_web] do
-    raise ArgumentError,
-          "the #{inspect(protocol)} protocol needs the GRPC.Client.Adapters.Mint or " <>
-            "GRPC.Client.Adapters.Gun adapter, got: #{inspect(adapter)}"
+    :ok
   end
 
   defp validate_protocol!(protocol, _adapter) do
@@ -1372,9 +1377,25 @@ defmodule GRPC.Client.Connection do
           ":protocol must be :grpc, :connect or :grpc_web, got: #{inspect(protocol)}"
   end
 
-  defp validate_adapter_opts!(adapter, opts) when is_list(opts) do
-    if Code.ensure_loaded?(adapter) and function_exported?(adapter, :validate_opts, 1) do
-      case adapter.validate_opts(opts) do
+  # An adapter that does not say speaks the gRPC protocol only.
+  defp supported_protocols(adapter) do
+    if Code.ensure_loaded?(adapter) and function_exported?(adapter, :supported_protocols, 0) do
+      adapter.supported_protocols()
+    else
+      [:grpc]
+    end
+  end
+
+  defp validate_adapter_opts!(adapter, opts, protocol) when is_list(opts) do
+    if Code.ensure_loaded?(adapter) do
+      result =
+        cond do
+          function_exported?(adapter, :validate_opts, 2) -> adapter.validate_opts(opts, protocol)
+          function_exported?(adapter, :validate_opts, 1) -> adapter.validate_opts(opts)
+          true -> :ok
+        end
+
+      case result do
         :ok -> :ok
         {:error, message} -> raise ArgumentError, message
       end
@@ -1383,7 +1404,7 @@ defmodule GRPC.Client.Connection do
     :ok
   end
 
-  defp validate_adapter_opts!(_adapter, _),
+  defp validate_adapter_opts!(_adapter, _opts, _protocol),
     do: raise(ArgumentError, ":adapter_opts must be a keyword list if present")
 
   defp build_compressor_list(compressor, accepted) when is_list(accepted) do

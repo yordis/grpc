@@ -37,6 +37,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     alias GRPC.Channel
     alias GRPC.Client.Connect
+    alias GRPC.Client.HTTPVersions
     alias GRPC.Client.Adapters.Mint.ConnectionProcess
     alias GRPC.Client.Adapters.Mint.StreamResponseProcess
     alias GRPC.Credential
@@ -70,6 +71,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
         Defaults to `nil` (no pings).
       * `:keepalive_tolerance`: Number of unacknowledged pings after which the connection is closed,
         triggering `:retry` if configured. Defaults to `nil` (never close). Has no effect without `:keepalive`.
+      * `:protocols`: for `protocol: :connect` and `protocol: :grpc_web`, a non-empty list of the HTTP
+        versions to allow, from `:http1` and `:http2`. With `https://` the version is negotiated with
+        ALPN, and the default allows both. With `http://` there is no negotiation: the adapter speaks
+        HTTP/2 with prior knowledge unless the list is `[:http1]`. `protocol: :grpc` runs on HTTP/2 only
+        and takes no `:protocols` other than `[:http2]`. A value that is not valid raises `ArgumentError`
+        from `GRPC.Stub.connect/2`.
     """
     @impl true
     def connect(%Channel{} = channel, opts \\ []) do
@@ -98,8 +105,16 @@ if Code.ensure_loaded?(Mint.HTTP) do
     ]
 
     @impl true
+    def supported_protocols, do: [:grpc, :connect, :grpc_web]
+
+    @impl true
     def validate_opts(opts) do
       with :ok <- validate_known_opts(opts), do: validate_retry(opts[:retry])
+    end
+
+    @impl true
+    def validate_opts(opts, protocol) do
+      with :ok <- validate_opts(opts), do: HTTPVersions.validate(protocol, opts)
     end
 
     @impl true
@@ -274,16 +289,11 @@ if Code.ensure_loaded?(Mint.HTTP) do
       ]
     end
 
-    # The gRPC protocol runs on HTTP/2 only. Connect and gRPC-Web run on either version.
-    defp put_protocols(opts, %Channel{protocol: protocol}, protocols)
-         when protocol in [:connect, :grpc_web] and is_list(protocols),
-         do: Keyword.put(opts, :protocols, protocols)
-
-    defp put_protocols(opts, %Channel{protocol: protocol}, _protocols)
-         when protocol in [:connect, :grpc_web],
-         do: Keyword.put(opts, :protocols, [:http1, :http2])
-
-    defp put_protocols(opts, _channel, _protocols), do: opts
+    # See `GRPC.Client.HTTPVersions` for how the version is picked.
+    defp put_protocols(opts, %Channel{protocol: protocol} = channel, protocols) do
+      transport = if mint_scheme(channel) == :https, do: :tls, else: :tcp
+      Keyword.put(opts, :protocols, HTTPVersions.select(protocol, protocols, transport))
+    end
 
     defp mint_scheme(%Channel{scheme: "https"} = _channel), do: :https
     defp mint_scheme(_channel), do: :http

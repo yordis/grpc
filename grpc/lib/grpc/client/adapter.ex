@@ -9,6 +9,19 @@ defmodule GRPC.Client.Adapter do
 
   @callback validate_opts(opts :: keyword()) :: :ok | {:error, String.t()}
 
+  @doc """
+  Like `c:validate_opts/1`, for an adapter whose options depend on the wire protocol of the
+  channel. It takes precedence over `c:validate_opts/1`.
+  """
+  @callback validate_opts(opts :: keyword(), protocol :: atom()) :: :ok | {:error, String.t()}
+
+  @doc """
+  The wire protocols the adapter speaks, from `:grpc`, `:connect` and `:grpc_web`. An adapter
+  without this callback speaks `:grpc` only. `GRPC.Stub.connect/2` raises `ArgumentError` for
+  a `:protocol` that is not in the list.
+  """
+  @callback supported_protocols() :: [atom()]
+
   @callback disconnect(channel :: struct()) :: {:ok, struct()} | {:error, any()}
 
   @callback send_request(stream :: Stream.t(), contents :: iodata(), opts :: keyword()) ::
@@ -46,7 +59,7 @@ defmodule GRPC.Client.Adapter do
   """
   @callback cancel(stream :: Stream.t()) :: :ok | {:error, any()}
 
-  @optional_callbacks validate_opts: 1
+  @optional_callbacks validate_opts: 1, validate_opts: 2, supported_protocols: 0
 
   # Calls an adapter's connection process without leaking the request in the exit.
   #

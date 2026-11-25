@@ -93,7 +93,7 @@ defmodule GRPC.Client.ProtocolOptionsTest do
         assert_raise ArgumentError, ~r/protocols.*:grpc|:grpc.*protocols/, fn ->
           GRPC.Stub.connect("localhost:1",
             adapter: adapter,
-            adapter_opts: [protocols: [:http2]]
+            adapter_opts: [protocols: [:http1]]
           )
         end
       end

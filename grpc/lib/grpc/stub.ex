@@ -391,6 +391,12 @@ defmodule GRPC.Stub do
     * `:cred` - a `GRPC.Credential` used to indicate it's a secure connection.
       An insecure connection will be created without this option.
     * `:adapter` - custom client adapter
+    * `:protocol` - the wire protocol of the calls: `:grpc` (default), `:connect` or
+      `:grpc_web`. The adapter has to speak it (`GRPC.Client.Adapter.supported_protocols/0`),
+      or `connect/2` raises `ArgumentError`. `GRPC.Client.Adapters.Mint` and
+      `GRPC.Client.Adapters.Gun` speak all three. With `:connect` and `:grpc_web`, the adapter
+      option `:protocols` picks the HTTP version, see `GRPC.Client.Connection`: HTTP/2 on
+      `http://`, negotiated on `https://`.
     * `:interceptors` - client interceptors
     * `:codec` - client will use this to encode and decode binary message
     * `:compressor` - the client will use this to compress requests and decompress responses.

@@ -6,6 +6,7 @@ defmodule GRPC.Client.Application do
     supervisor_config = Application.get_env(:grpc, __MODULE__, [])
 
     children = [
+      GRPC.Client.CancelHandle.Table,
       {Registry, [keys: :unique, name: GRPC.Client.Registry]},
       {Registry, [keys: :unique, name: GRPC.Client.Pool.Registry]},
       {DynamicSupervisor,

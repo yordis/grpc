@@ -29,6 +29,9 @@ defmodule GRPC.Client.Stream do
             canceled: false,
             compressor: nil,
             accepted_compressors: [],
+            # The largest reply message, in bytes, of this call. `nil` is the
+            # `:max_message_length` application setting.
+            max_receive_message_length: nil,
             headers: %{},
             __interface__: %{
               send_request: &__MODULE__.send_request/3,

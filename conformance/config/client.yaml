@@ -19,5 +19,5 @@ features:
   supportsHalfDuplexBidiOverHttp1: false
   # Connect GET only applies to the Connect protocol.
   supportsConnectGet: false
-  # Applied through the :max_message_length application setting (see Conformance.Client.Gate).
+  # Applied per call with the :max_receive_message_length option.
   supportsMessageReceiveLimit: true

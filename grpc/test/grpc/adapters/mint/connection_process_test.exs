@@ -296,6 +296,23 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       assert {[{request_ref, <<1, 2, 3>>, self()}], []} == new_state.request_stream_queue
       assert new_state.conn == state.conn
     end
+
+    test "drops the body of a request that is gone, such as one that was cancelled", %{
+      request_ref: request_ref,
+      state: state
+    } do
+      {_ref, state_without_ref} = pop_in(state.requests[request_ref])
+
+      response =
+        ConnectionProcess.handle_call(
+          {:stream_body, request_ref, <<1, 2, 3>>},
+          self(),
+          state_without_ref
+        )
+
+      assert {:reply, :ok, new_state} = response
+      assert :queue.is_empty(new_state.request_stream_queue)
+    end
   end
 
   describe "handle_call/2 - cancel_request" do

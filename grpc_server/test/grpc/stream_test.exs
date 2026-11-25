@@ -62,7 +62,7 @@ defmodule GRPC.StreamTest do
       input = [%{message: "a"}, %{message: "b"}]
 
       flow =
-        GRPC.Stream.from(input, max_demand: 1)
+        GRPC.Stream.from(input, max_demand: 1, stages: 1)
         |> GRPC.Stream.map(& &1)
 
       result = Enum.to_list(GRPC.Stream.to_flow(flow))

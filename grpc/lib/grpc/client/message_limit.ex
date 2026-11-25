@@ -20,10 +20,24 @@ defmodule GRPC.Client.MessageLimit do
   Checks the length in the prefix of the first message in `data`.
 
   Returns `:ok` when it is within the limit, or when `data` has no full prefix yet.
+  `limit` is the limit of the call, in bytes; without it the `:max_message_length`
+  setting applies.
   """
-  @spec check_prefix(binary) :: :ok | {:error, Exception.t()}
-  def check_prefix(<<_flag::8, length::big-32, _::binary>>) do
-    max_length = max_message_length()
+  @spec check_prefix(binary, non_neg_integer | nil) :: :ok | {:error, Exception.t()}
+  def check_prefix(data, limit \\ nil)
+
+  def check_prefix(<<_flag::8, length::big-32, _::binary>>, limit),
+    do: check_size(length, limit)
+
+  def check_prefix(_data, _limit), do: :ok
+
+  @doc """
+  Checks the size of a message against the limit of the call, as `check_prefix/2` does
+  for the prefix of an enveloped message.
+  """
+  @spec check_size(non_neg_integer, non_neg_integer | nil) :: :ok | {:error, Exception.t()}
+  def check_size(length, limit \\ nil) do
+    max_length = limit || max_message_length()
 
     if length > max_length do
       {:error,
@@ -36,6 +50,4 @@ defmodule GRPC.Client.MessageLimit do
       :ok
     end
   end
-
-  def check_prefix(_data), do: :ok
 end

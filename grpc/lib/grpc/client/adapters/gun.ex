@@ -587,7 +587,9 @@ if Code.ensure_loaded?(:gun) do
       if function_exported?(codec, :unpack_from_channel, 1) do
         :ok
       else
-        case GRPC.Client.MessageLimit.check_prefix(IO.iodata_to_binary(acc)) do
+        limit = stream.max_receive_message_length
+
+        case GRPC.Client.MessageLimit.check_prefix(IO.iodata_to_binary(acc), limit) do
           :ok ->
             :ok
 
@@ -677,7 +679,7 @@ if Code.ensure_loaded?(:gun) do
              ended: ended
            } = stream
          ) do
-      case get_message(buffer, compressor) do
+      case get_message(buffer, compressor, stream.stream.max_receive_message_length) do
         {:error, _} = error ->
           # The rest of the message is not read: reset the stream.
           cancel(stream.stream)
@@ -729,9 +731,9 @@ if Code.ensure_loaded?(:gun) do
     # A message over `:max_message_length` ends the stream with an error item.
     # The prefix is checked here, as newer `GRPC.Message.get_message/1` does, and
     # that function raises for it.
-    defp get_message(buffer, compressor) do
-      with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer) do
-        case GRPC.Message.get_message(buffer, compressor) do
+    defp get_message(buffer, compressor, limit) do
+      with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer, limit) do
+        case GRPC.Message.get_message(buffer, compressor, max_message_length: limit) do
           {{1, _message}, _rest} when is_nil(compressor) ->
             {:error,
              GRPC.RPCError.exception(
@@ -825,7 +827,12 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp parse_response(
-           %{response_mod: res_mod, codec: codec, accepted_compressors: accepted_compressors},
+           %{
+             response_mod: res_mod,
+             codec: codec,
+             accepted_compressors: accepted_compressors,
+             max_receive_message_length: limit
+           },
            headers,
            body,
            trailers
@@ -834,8 +841,9 @@ if Code.ensure_loaded?(:gun) do
            compressor <- get_compressor(headers, accepted_compressors),
            body <- get_body(codec, body),
            :ok <- check_has_message(body, headers, trailers),
-           :ok <- GRPC.Client.MessageLimit.check_prefix(body),
-           {:ok, msg, remaining} <- GRPC.Message.from_data(%{compressor: compressor}, body),
+           :ok <- GRPC.Client.MessageLimit.check_prefix(body, limit),
+           {:ok, msg, remaining} <-
+             GRPC.Message.from_data(%{compressor: compressor, max_message_length: limit}, body),
            {:ok, embedded_trailers} <- check_for_trailers(remaining, compressor),
            {:ok, reply} <- GRPC.Client.ReplyDecoder.decode(codec, msg, res_mod) do
         {:ok, reply, embedded_trailers}

@@ -113,7 +113,7 @@ defmodule GRPC.Client.GrpcWeb.Response do
     decoded = decoded_headers(response)
 
     if Map.has_key?(decoded, "grpc-status") do
-      {response, trailers_items(decoded, nil, true), :ok}
+      {response, trailers_items(decoded, decoded, true), :ok}
     else
       {response, [{:error, missing_status(response, <<>>)}], :ok}
     end
@@ -145,7 +145,7 @@ defmodule GRPC.Client.GrpcWeb.Response do
   # of the call otherwise.
   defp trailers_items(trailers, headers, trailers_only?) do
     case status_error(trailers, headers) do
-      :ok when trailers_only? -> [{:headers, trailers}]
+      :ok when trailers_only? -> [{:headers, trailers}, {:trailers, trailers}]
       :ok -> [{:trailers, trailers}]
       {:error, error} -> [{:error, error}]
     end

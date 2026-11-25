@@ -264,7 +264,7 @@ defmodule GRPC.Client.Connection do
     * `:protocol` – the wire protocol of the calls, `:grpc` (default), `:connect` or
       `:grpc_web`. `:connect` speaks the [Connect protocol](https://connectrpc.com/docs/protocol)
       and `:grpc_web` the [gRPC-Web protocol](https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md).
-      Both need the Mint adapter and run over HTTP/1.1 and HTTP/2
+      Both need the Mint or the Gun adapter and run over HTTP/1.1 and HTTP/2
       (`adapter_opts: [protocols: [:http1, :http2]]`).
     * `:compressor` / `:accepted_compressors` – message compression
     * `:headers` – default metadata headers
@@ -1349,13 +1349,16 @@ defmodule GRPC.Client.Connection do
   defp resolve_credential(other, _scheme), do: other
 
   defp validate_protocol!(:grpc, _adapter), do: :ok
-  defp validate_protocol!(protocol, GRPC.Client.Adapters.Mint)
-       when protocol in [:connect, :grpc_web],
+
+  defp validate_protocol!(protocol, adapter)
+       when protocol in [:connect, :grpc_web] and
+              adapter in [GRPC.Client.Adapters.Mint, GRPC.Client.Adapters.Gun],
        do: :ok
 
   defp validate_protocol!(protocol, adapter) when protocol in [:connect, :grpc_web] do
     raise ArgumentError,
-          "the #{inspect(protocol)} protocol needs the GRPC.Client.Adapters.Mint adapter, got: #{inspect(adapter)}"
+          "the #{inspect(protocol)} protocol needs the GRPC.Client.Adapters.Mint or " <>
+            "GRPC.Client.Adapters.Gun adapter, got: #{inspect(adapter)}"
   end
 
   defp validate_protocol!(protocol, _adapter) do

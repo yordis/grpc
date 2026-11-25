@@ -59,6 +59,7 @@ if Code.ensure_loaded?(:gun) do
     @behaviour GRPC.Client.Adapter
 
     alias GRPC.Client.Adapter
+    alias GRPC.Client.Connect
     alias GRPC.Client.Adapters.Gun.ConnectionProcess
 
     @default_tcp_opts [nodelay: true]
@@ -149,7 +150,7 @@ if Code.ensure_loaded?(:gun) do
         |> Map.delete(:transport_opts)
         |> Map.merge(%{
           transport: :ssl,
-          protocols: [:http2],
+          protocols: protocols(channel, opts, :tls),
           tcp_opts: @default_tcp_opts,
           tls_opts: tls_opts
         })
@@ -173,10 +174,32 @@ if Code.ensure_loaded?(:gun) do
       open_opts =
         opts
         |> Map.delete(:transport_opts)
-        |> Map.merge(%{transport: :tcp, protocols: [:http2], tcp_opts: tcp_opts})
+        |> Map.merge(%{
+          transport: :tcp,
+          protocols: protocols(channel, opts, :tcp),
+          tcp_opts: tcp_opts
+        })
 
       do_connect(channel, open_opts)
     end
+
+    # The gRPC protocol runs on HTTP/2 only. Connect and gRPC-Web run on either version,
+    # `:http1` and `:http2` as the Mint adapter names them, and Gun opens a plain TCP
+    # connection with one.
+    defp protocols(%{protocol: protocol}, opts, transport)
+         when protocol in [:connect, :grpc_web] do
+      protocols =
+        opts
+        |> Map.get(:protocols, [:http1, :http2])
+        |> Enum.map(fn
+          :http1 -> :http
+          protocol -> protocol
+        end)
+
+      if transport == :tcp, do: Enum.take(protocols, 1), else: protocols
+    end
+
+    defp protocols(_channel, _opts, _transport), do: [:http2]
 
     defp do_connect(channel, open_opts) do
       # `:retry` and `:retry_fun` given in `:adapter_opts` take precedence.
@@ -244,11 +267,10 @@ if Code.ensure_loaded?(:gun) do
            opts,
            deadline
          ) do
-      headers = GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
-      {:ok, data, _} = GRPC.Message.to_data(message, opts)
+      {method, path, headers, data} = request_parts(stream, path, message, opts)
 
       case call_connection(conn_pid, fn ->
-             ConnectionProcess.request(conn_pid, path, headers, data, deadline)
+             ConnectionProcess.request(conn_pid, method, path, headers, data, deadline)
            end) do
         {:ok, %{stream_ref: stream_ref, response_pid: response_pid}} ->
           {:ok, stream_ref, response_pid}
@@ -258,13 +280,46 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
+    # A Connect unary call sends its message as the whole body, or in the query of a GET.
+    defp request_parts(%{channel: %{protocol: :connect}} = stream, path, message, opts) do
+      kind = Connect.kind(stream)
+
+      cond do
+        opts[:http_method] == :get and kind == :unary ->
+          {"GET", Connect.get_path(stream, message, opts), request_headers(stream, opts, "GET"),
+           nil}
+
+        kind == :unary ->
+          {"POST", path, request_headers(stream, opts, "POST"),
+           Connect.unary_body(message, opts[:compressor])}
+
+        true ->
+          {:ok, data, _} = GRPC.Message.to_data(message, opts)
+          {"POST", path, request_headers(stream, opts, "POST"), data}
+      end
+    end
+
+    defp request_parts(stream, path, message, opts) do
+      {:ok, data, _} = GRPC.Message.to_data(message, opts)
+      {"POST", path, request_headers(stream, opts, "POST"), data}
+    end
+
+    defp request_headers(%{channel: %{protocol: :connect}} = stream, opts, method),
+      do: Connect.request_headers(stream, opts, method)
+
+    defp request_headers(%{channel: %{protocol: :grpc_web}} = stream, opts, _method),
+      do: GRPC.Client.GrpcWeb.request_headers(stream, opts)
+
+    defp request_headers(stream, opts, _method),
+      do: GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
+
     @impl true
     def send_headers(
           %{channel: %{adapter_payload: %{conn_pid: conn_pid}}, path: path} = stream,
           opts
         ) do
       deadline = deadline(opts[:timeout])
-      headers = GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
+      headers = request_headers(stream, opts, "POST")
 
       case call_connection(conn_pid, fn ->
              ConnectionProcess.open_stream(conn_pid, path, headers, deadline)
@@ -326,6 +381,10 @@ if Code.ensure_loaded?(:gun) do
     @impl true
     def receive_data(%{payload: %{request_error: error}}, _opts), do: {:error, error}
 
+    def receive_data(%{channel: %{protocol: protocol}} = stream, opts)
+        when protocol in [:connect, :grpc_web],
+        do: receive_connect(stream, stream.grpc_type, opts)
+
     def receive_data(
           %{server_stream: true} = stream,
           opts
@@ -363,6 +422,196 @@ if Code.ensure_loaded?(:gun) do
           error
       end
     end
+
+    # The Connect and gRPC-Web protocols. `Connect.Response` or `GrpcWeb.Response` reads the response, and this feeds it what
+    # Gun delivers for the stream: the status and the headers, the data, the end.
+    defp receive_connect(stream, type, opts)
+         when type in [:server_stream, :bidirectional_stream] do
+      state = connect_state(stream, opts)
+
+      case connect_headers(state) do
+        {:ok, headers, state} ->
+          replies = connect_replies(state)
+
+          if opts[:return_headers],
+            do: {:ok, replies, %{headers: headers}},
+            else: {:ok, replies}
+
+        {:error, _} = error ->
+          error
+      end
+    end
+
+    defp receive_connect(stream, _type, opts) do
+      {items, _state} = connect_collect(connect_state(stream, opts), [])
+
+      case {Keyword.get(items, :error), Keyword.get_values(items, :ok)} do
+        {nil, [reply]} ->
+          if opts[:return_headers] do
+            {:ok, reply,
+             %{headers: Keyword.get(items, :headers), trailers: Keyword.get(items, :trailers)}}
+          else
+            {:ok, reply}
+          end
+
+        {nil, []} ->
+          GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+          {:error,
+           GRPC.RPCError.exception(GRPC.Status.unimplemented(), "Missing response message.")}
+
+        {nil, _several} ->
+          GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+          {:error,
+           GRPC.RPCError.exception(
+             GRPC.Status.unimplemented(),
+             "Received more than one message for a call that returns one."
+           )}
+
+        {error, _replies} ->
+          {:error, error}
+      end
+    end
+
+    defp connect_state(stream, opts) do
+      %{
+        stream: stream,
+        response: raw_response(stream),
+        response_pid: stream.payload.response_pid,
+        deadline: receive_deadline(stream.payload, opts),
+        return_headers: opts[:return_headers] == true,
+        items: [],
+        done: false
+      }
+    end
+
+    defp raw_response(%{channel: %{protocol: :connect}} = stream),
+      do: GRPC.Client.Connect.Response.new(stream)
+
+    defp raw_response(%{channel: %{protocol: :grpc_web}} = stream),
+      do: GRPC.Client.GrpcWeb.Response.new(stream)
+
+    # Reads up to the headers of the response. Whatever came with them stays in the state.
+    defp connect_headers(%{items: [{:headers, headers} | rest]} = state),
+      do: {:ok, headers, %{state | items: rest}}
+
+    defp connect_headers(%{items: [{:error, error} | _]}), do: {:error, error}
+    defp connect_headers(%{done: true}), do: {:error, connect_ended()}
+
+    defp connect_headers(state) do
+      case connect_pull(state) do
+        {:error, _} = error -> error
+        state -> connect_headers(state)
+      end
+    end
+
+    # The replies of a streaming call are read from the response once, however many times
+    # the caller enumerates them, as a caller does that reads a reply after each request of
+    # a bidi stream. The state of the read is in an agent, linked to the caller, that goes
+    # away with the last item.
+    defp connect_replies(state) do
+      {:ok, agent} = Agent.start_link(fn -> state end)
+      Stream.resource(fn -> agent end, &connect_take/1, fn _agent -> :ok end)
+    end
+
+    defp connect_take(agent) do
+      take = fn state ->
+        case connect_next(state) do
+          nil -> {:halt, state}
+          {item, state} -> {{:item, item}, state}
+        end
+      end
+
+      case Agent.get_and_update(agent, take, :infinity) do
+        {:item, item} ->
+          {[item], agent}
+
+        :halt ->
+          Agent.stop(agent)
+          {:halt, agent}
+      end
+    catch
+      :exit, _reason -> {:halt, agent}
+    end
+
+    # The next item of a streaming call. An error is the last one.
+    defp connect_next(%{items: [{:error, error} | _]} = state) do
+      unless state.done, do: cancel(state.stream)
+      {{:error, error}, %{state | items: [], done: true}}
+    end
+
+    defp connect_next(%{items: [{:headers, _} | rest]} = state),
+      do: connect_next(%{state | items: rest})
+
+    defp connect_next(%{items: [{:trailers, _} | rest]} = state) when not state.return_headers,
+      do: connect_next(%{state | items: rest})
+
+    defp connect_next(%{items: [item | rest]} = state), do: {item, %{state | items: rest}}
+    defp connect_next(%{done: true}), do: nil
+
+    defp connect_next(state) do
+      case connect_pull(state) do
+        {:error, error} -> {{:error, error}, %{state | items: [], done: true}}
+        state -> connect_next(state)
+      end
+    end
+
+    # Reads the whole response: the items of the call by their kind.
+    defp connect_collect(%{done: true} = state, acc), do: {acc ++ state.items, state}
+
+    defp connect_collect(state, acc) do
+      case connect_pull(state) do
+        {:error, error} -> {acc ++ [error: error], state}
+        pulled -> connect_collect(%{pulled | items: []}, acc ++ pulled.items)
+      end
+    end
+
+    # Waits for the next thing Gun delivers and gives it to the response.
+    defp connect_pull(%{response_pid: response_pid, deadline: deadline} = state) do
+      case connect_events(response_pid, deadline) do
+        {:error, _} = error ->
+          error
+
+        events ->
+          Enum.reduce(events, state, fn event, state ->
+            {response, items, action} =
+              state.response.__struct__.consume(state.response, event)
+
+            if action == :cancel, do: cancel(state.stream)
+
+            %{
+              state
+              | response: response,
+                items: state.items ++ items,
+                done: state.done or event == :done or action == :cancel
+            }
+          end)
+      end
+    end
+
+    defp connect_events(response_pid, deadline) do
+      case GRPC.Client.Adapters.Gun.StreamResponseProcess.await(response_pid, deadline) do
+        {:response, fin, status, headers} ->
+          [{:status, status}, {:headers, headers}] ++ connect_end(fin)
+
+        {:data, fin, data} ->
+          [{:data, data}] ++ connect_end(fin)
+
+        {:trailers, trailers} ->
+          [{:headers, trailers}, :done]
+
+        error ->
+          {:error, error} = await_error(error, deadline)
+          {:error, error}
+      end
+    end
+
+    defp connect_end(:fin), do: [:done]
+    defp connect_end(:nofin), do: []
+
+    defp connect_ended,
+      do: GRPC.RPCError.exception(GRPC.Status.internal(), "The response ended without headers")
 
     defp handle_fin_response(headers, opts) do
       # Trailers-only response: headers contain trailers, check status
@@ -458,53 +707,61 @@ if Code.ensure_loaded?(:gun) do
         trailers = {:trailers, _} ->
           trailers
 
-        {:error, :timeout} ->
-          deadline_exceeded()
-
-        {:error, :canceled} ->
-          {:error, GRPC.RPCError.exception(GRPC.Status.cancelled(), "Canceled by the client")}
-
-        # Connection-level failures are UNAVAILABLE per the gRPC status spec:
-        # the RPC never completed on a live connection, so callers can safely
-        # retry (deadline errors above stay DEADLINE_EXCEEDED).
-        {:error, {:connection_error, :closed}} when is_integer(deadline) ->
-          if deadline <= System.monotonic_time(:millisecond) do
-            deadline_exceeded()
-          else
-            connection_error(:closed)
-          end
-
-        {:error, {:connection_error, msg}} ->
-          connection_error(msg)
-
-        # A server enforces the `grpc-timeout` it was sent from when the request reached it,
-        # so never before the client's own deadline. A CANCEL reset once the deadline has
-        # passed is that deadline, whichever side notices first.
-        {:error, {:stream_error, msg}} ->
-          if cancel_reset?(msg) and near_deadline?(deadline) do
-            deadline_exceeded()
-          else
-            GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
-
-            {:error,
-             GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
-          end
-
-        # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
-        {:error, {reason, msg}} when reason in [:down, :noproc, :normal, :shutdown] ->
-          connection_error({reason, msg})
-
-        {:error, {reason, msg}} ->
-          {:error,
-           GRPC.RPCError.exception(GRPC.Status.unknown(), "#{inspect(reason)}: #{inspect(msg)}")}
-
-        other ->
-          {:error,
-           GRPC.RPCError.exception(
-             GRPC.Status.unknown(),
-             "unexpected message when waiting for server: #{inspect(other)}"
-           )}
+        error ->
+          await_error(error, deadline)
       end
+    end
+
+    defp await_error({:error, :timeout}, _deadline), do: deadline_exceeded()
+
+    defp await_error({:error, :canceled}, _deadline) do
+      {:error, GRPC.RPCError.exception(GRPC.Status.cancelled(), "Canceled by the client")}
+    end
+
+    # Connection-level failures are UNAVAILABLE per the gRPC status spec:
+    # the RPC never completed on a live connection, so callers can safely
+    # retry (deadline errors above stay DEADLINE_EXCEEDED).
+    defp await_error({:error, {:connection_error, :closed}}, deadline)
+         when is_integer(deadline) do
+      if deadline <= System.monotonic_time(:millisecond) do
+        deadline_exceeded()
+      else
+        connection_error(:closed)
+      end
+    end
+
+    defp await_error({:error, {:connection_error, msg}}, _deadline), do: connection_error(msg)
+
+    # A server enforces the `grpc-timeout` it was sent from when the request reached it,
+    # so never before the client's own deadline. A CANCEL reset once the deadline has
+    # passed is that deadline, whichever side notices first.
+    defp await_error({:error, {:stream_error, msg}}, deadline) do
+      if cancel_reset?(msg) and near_deadline?(deadline) do
+        deadline_exceeded()
+      else
+        GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
+
+        {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+      end
+    end
+
+    # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
+    defp await_error({:error, {reason, msg}}, _deadline)
+         when reason in [:down, :noproc, :normal, :shutdown] do
+      connection_error({reason, msg})
+    end
+
+    defp await_error({:error, {reason, msg}}, _deadline) do
+      {:error,
+       GRPC.RPCError.exception(GRPC.Status.unknown(), "#{inspect(reason)}: #{inspect(msg)}")}
+    end
+
+    defp await_error(other, _deadline) do
+      {:error,
+       GRPC.RPCError.exception(
+         GRPC.Status.unknown(),
+         "unexpected message when waiting for server: #{inspect(other)}"
+       )}
     end
 
     defp response_headers(200, headers, fin) do

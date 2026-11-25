@@ -235,6 +235,13 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
+    # A request that was cancelled, or has ended, takes no more body. Queuing it would make
+    # the queue processor ask Mint for the window of a request it does not know.
+    def handle_call({:stream_body, request_ref, _body}, _from, state)
+        when not State.has_request_ref(state, request_ref) do
+      {:reply, :ok, state}
+    end
+
     def handle_call({:stream_body, request_ref, body}, from, state) do
       queue = :queue.in({request_ref, body, from}, state.request_stream_queue)
 

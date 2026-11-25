@@ -45,12 +45,68 @@ defmodule GRPC.Client.Connect.Response do
 
   def consume(response, {:data, data}), do: {%{response | body: response.body <> data}, [], :ok}
 
-  def consume(%{kind: :unary} = response, :done) do
+  def consume(%{kind: :unary, status: 200} = response, :done) do
     {:ok, reply} =
       GRPC.Client.ReplyDecoder.decode(response.codec, response.body, response.response_mod)
 
     {response, [{:ok, reply}, {:trailers, trailers(response.headers)}], :ok}
   end
+
+  def consume(%{kind: :unary} = response, :done) do
+    items = [{:trailers, trailers(response.headers)}, {:error, unary_error(response)}]
+    {response, items, :ok}
+  end
+
+  # The error of a failed unary call is a JSON body. Without one, the HTTP status says what
+  # went wrong.
+  defp unary_error(%{status: status, body: body}) do
+    with {:ok, %{"code" => code} = json} <- Jason.decode(body),
+         {:ok, grpc_status} <- code_status(code) do
+      %GRPC.RPCError{
+        status: grpc_status,
+        message: json["message"],
+        details: details(json["details"])
+      }
+    else
+      _ ->
+        GRPC.RPCError.exception(
+          HTTP2.status_from_http(status),
+          "HTTP status #{status}"
+        )
+    end
+  end
+
+  @codes ~w(
+    ok canceled unknown invalid_argument deadline_exceeded not_found already_exists
+    permission_denied resource_exhausted failed_precondition aborted out_of_range
+    unimplemented internal unavailable data_loss unauthenticated
+  )
+
+  defp code_status(code) when is_binary(code) do
+    case Enum.find_index(@codes, &(&1 == code)) do
+      nil -> :error
+      index -> {:ok, index}
+    end
+  end
+
+  defp code_status(_code), do: :error
+
+  defp details(details) when is_list(details) do
+    for %{"type" => type, "value" => value} <- details, {:ok, bytes} <- [decode_value(value)] do
+      %Google.Protobuf.Any{type_url: "type.googleapis.com/" <> type, value: bytes}
+    end
+  end
+
+  defp details(_details), do: nil
+
+  defp decode_value(value) when is_binary(value) do
+    case Base.decode64(value, padding: false) do
+      {:ok, _} = ok -> ok
+      :error -> Base.decode64(value)
+    end
+  end
+
+  defp decode_value(_value), do: :error
 
   defp response_headers(headers) do
     headers

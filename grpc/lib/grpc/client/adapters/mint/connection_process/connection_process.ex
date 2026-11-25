@@ -147,7 +147,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
       {:stop, :normal, State.update_conn(state, conn)}
     end
 
-    def handle_call(_request, _from, %{conn: %Mint.HTTP2{state: :closed}} = state) do
+    def handle_call(_request, _from, %{conn: %{state: :closed}} = state) do
       {:reply, {:error, @connection_closed_error}, state}
     end
 
@@ -249,9 +249,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       state = drop_request(state, request_ref)
 
-      case Mint.HTTP2.cancel_request(state.conn, request_ref) do
-        {:ok, conn} -> {:reply, :ok, State.update_conn(state, conn)}
-        {:error, conn, error} -> {:reply, {:error, error}, State.update_conn(state, conn)}
+      case reset_request(state, request_ref) do
+        %{conn: %Mint.HTTP1{}} = state ->
+          {:reply, :ok, state, {:continue, :check_connection_status}}
+
+        state ->
+          {:reply, :ok, state}
       end
     end
 
@@ -353,7 +356,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp schedule_keepalive(state), do: state
 
-    defp handle_keepalive(%{conn: %Mint.HTTP2{state: :closed}} = state), do: {:noreply, state}
+    defp handle_keepalive(%{conn: %{state: :closed}} = state), do: {:noreply, state}
+
+    defp handle_keepalive(%{conn: %Mint.HTTP1{}} = state), do: {:noreply, state}
 
     defp handle_keepalive(%{pings_unacked: unacked, keepalive_tolerance: tolerance} = state)
          when is_integer(tolerance) and unacked >= tolerance do
@@ -507,10 +512,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp cancel_refused_stream(state, request_ref) do
       state = drop_request(state, request_ref)
 
-      case Mint.HTTP2.cancel_request(state.conn, request_ref) do
-        {:ok, conn} -> State.update_conn(state, conn)
-        {:error, conn, _error} -> State.update_conn(state, conn)
-      end
+      reset_request(state, request_ref)
     end
 
     defp cancel_dead_stream(state, request_ref, pid, reason) do
@@ -526,10 +528,21 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       state = drop_request(state, request_ref)
 
+      reset_request(state, request_ref)
+    end
+
+    # HTTP/2 resets the stream. HTTP/1 has no way to abandon one request, the
+    # connection is closed instead.
+    defp reset_request(%{conn: %Mint.HTTP2{}} = state, request_ref) do
       case Mint.HTTP2.cancel_request(state.conn, request_ref) do
         {:ok, conn} -> State.update_conn(state, conn)
         {:error, conn, _error} -> State.update_conn(state, conn)
       end
+    end
+
+    defp reset_request(state, _request_ref) do
+      {:ok, conn} = Mint.HTTP.close(state.conn)
+      State.update_conn(state, conn)
     end
 
     defp drop_request(state, request_ref) do
@@ -629,10 +642,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       state = drop_request(state, request_ref)
 
-      case Mint.HTTP2.cancel_request(state.conn, request_ref) do
-        {:ok, conn} -> State.update_conn(state, conn)
-        {:error, conn, _error} -> State.update_conn(state, conn)
-      end
+      reset_request(state, request_ref)
     end
 
     defp stream_body(conn, request_ref, body, true = _stream_eof?) do
@@ -661,12 +671,15 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
-    def get_window_size(conn, ref) do
+    def get_window_size(%Mint.HTTP2{} = conn, ref) do
       min(
         Mint.HTTP2.get_window_size(conn, {:request, ref}),
         Mint.HTTP2.get_window_size(conn, :connection)
       )
     end
+
+    # HTTP/1 has no flow control.
+    def get_window_size(_conn, _ref), do: 1_073_741_824
 
     defp finish_all_pending_requests(state, reason) do
       count = map_size(state.requests)
@@ -849,7 +862,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp notify_draining(state), do: state
 
-    defp observe_settings(state) do
+    defp observe_settings(%{conn: %Mint.HTTP2{}} = state) do
       max =
         normalize_max_streams(Mint.HTTP2.get_server_setting(state.conn, :max_concurrent_streams))
 
@@ -863,6 +876,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       %{state | settings_known?: true, max_concurrent_streams: max}
     end
+
+    defp observe_settings(state), do: %{state | settings_known?: true}
 
     defp emit_streams(state) do
       Telemetry.execute(:streams, %{active: map_size(state.requests)}, state.telemetry_metadata)

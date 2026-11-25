@@ -129,6 +129,11 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       from: nil,
       compressor: nil,
       failed: false,
+      # An error status in the first headers, which counts only if the response
+      # ends right there (a trailers-only response). Trailers replace it, and a
+      # message after it makes the missing trailers the error.
+      pending_status: nil,
+      data_seen: false,
       # The response ended with a `grpc-status`, or with an error, so it is complete.
       terminated: false
     }
@@ -162,7 +167,9 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
     case drain_buffer(combined, state.compressor, codec, res_mod, responses) do
       {new_buffer, new_responses} ->
-        new_state = %{state | buffer: new_buffer, responses: new_responses}
+        new_state =
+          %{state | buffer: new_buffer, responses: new_responses} |> Map.put(:data_seen, true)
+
         {:reply, :ok, new_state, {:continue, :produce_response}}
 
       # The error ends the stream, and the reply `:cancel` asks the connection
@@ -182,45 +189,9 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
     end
   end
 
-  def handle_call(
-        {:consume_response, {type, headers}},
-        _from,
-        %{send_headers_or_trailers: true, responses: responses} = state
-      )
+  def handle_call({:consume_response, {type, headers}}, _from, state)
       when type in @header_types do
-    state = update_compressor({type, headers}, state)
-    response = get_headers_response(headers, type, response_headers_for(type, state))
-    new_responses = :queue.in(response, responses)
-    state = remember_headers(response, state)
-
-    state = %{
-      state
-      | responses: new_responses,
-        terminated: state.terminated || terminal?(response)
-    }
-
-    {:reply, :ok, state, {:continue, :produce_response}}
-  end
-
-  def handle_call(
-        {:consume_response, {type, headers}},
-        _from,
-        %{send_headers_or_trailers: false, responses: responses} = state
-      )
-      when type in @header_types do
-    state = update_compressor({type, headers}, state)
-    response = get_headers_response(headers, type, response_headers_for(type, state))
-    state = remember_headers(response, state)
-    state = %{state | terminated: state.terminated || terminal?(response)}
-
-    case response do
-      {:error, _rpc_error} = error ->
-        {:reply, :ok, %{state | responses: :queue.in(error, responses)},
-         {:continue, :produce_response}}
-
-      _any ->
-        {:reply, :ok, state, {:continue, :produce_response}}
-    end
+    {:reply, :ok, consume_headers(type, headers, state), {:continue, :produce_response}}
   end
 
   # A late error does not replace a response that has ended.
@@ -235,6 +206,18 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       ) do
     # An error ends the stream: the request is reset after it, so no `:done` follows.
     {:reply, :ok, %{state | responses: :queue.in(error, responses), terminated: true, done: true},
+     {:continue, :produce_response}}
+  end
+
+  # The headers carried the status and nothing followed: a trailers-only response.
+  def handle_call(
+        {:consume_response, :done},
+        _from,
+        %{pending_status: {:error, _} = error, terminated: false} = state
+      )
+      when not is_map_key(state, :data_seen) or state.data_seen != true do
+    {:reply, :ok,
+     %{state | responses: :queue.in(error, state.responses), terminated: true, done: true},
      {:continue, :produce_response}}
   end
 
@@ -294,6 +277,44 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
         {{:value, response}, rest} = :queue.out(state.responses)
         GenServer.reply(state.from, response)
         {:noreply, %{state | responses: rest, from: nil}}
+    end
+  end
+
+  defp consume_headers(:headers, headers, %{terminated: false} = state) do
+    case get_headers_response(headers, :headers, nil) do
+      {:error, _error} = error ->
+        state = update_compressor({:headers, headers}, state)
+        state |> Map.put(:pending_status, error) |> Map.put(:headers, headers)
+
+      _response ->
+        do_consume_headers(:headers, headers, state)
+    end
+  end
+
+  defp consume_headers(type, headers, state),
+    do: do_consume_headers(type, headers, Map.put(state, :pending_status, nil))
+
+  defp do_consume_headers(type, headers, %{send_headers_or_trailers: true} = state) do
+    state = update_compressor({type, headers}, state)
+    response = get_headers_response(headers, type, response_headers_for(type, state))
+    state = remember_headers(response, state)
+
+    %{
+      state
+      | responses: :queue.in(response, state.responses),
+        terminated: state.terminated || terminal?(response)
+    }
+  end
+
+  defp do_consume_headers(type, headers, state) do
+    state = update_compressor({type, headers}, state)
+    response = get_headers_response(headers, type, response_headers_for(type, state))
+    state = remember_headers(response, state)
+    state = %{state | terminated: state.terminated || terminal?(response)}
+
+    case response do
+      {:error, _rpc_error} = error -> %{state | responses: :queue.in(error, state.responses)}
+      _any -> state
     end
   end
 

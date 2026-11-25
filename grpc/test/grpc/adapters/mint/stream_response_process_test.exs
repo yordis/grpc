@@ -166,6 +166,23 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
 
         assert {:reply, :ok, new_state, {:continue, :produce_response}} = response
 
+        # An error status in the first headers counts when nothing follows them.
+        new_state =
+          if type == :headers do
+            assert [] = :queue.to_list(new_state.responses)
+
+            assert {:reply, :ok, ended, _} =
+                     StreamResponseProcess.handle_call(
+                       {:consume_response, :done},
+                       self(),
+                       new_state
+                     )
+
+            ended
+          else
+            new_state
+          end
+
         assert [{:error, %GRPC.RPCError{message: "Internal Server Error", status: 2} = error}] =
                  :queue.to_list(new_state.responses)
 

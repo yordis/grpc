@@ -66,7 +66,6 @@ if Code.ensure_loaded?(:gun) do
     @max_retries 100
     # Default of `:response_window`, in bytes.
     @default_response_window 1_048_576
-    @deadline_tolerance 1
     # One frame. A smaller window stalls a cowlib peer, which holds data back
     # while the stream window is under 16,384 bytes and the data does not fit.
     @min_response_window 16_384
@@ -732,17 +731,18 @@ if Code.ensure_loaded?(:gun) do
 
     defp await_error({:error, {:connection_error, msg}}, _deadline), do: connection_error(msg)
 
-    # A server enforces the `grpc-timeout` it was sent from when the request reached it,
-    # so never before the client's own deadline. A CANCEL reset once the deadline has
-    # passed is that deadline, whichever side notices first.
-    defp await_error({:error, {:stream_error, msg}}, deadline) do
-      if cancel_reset?(msg) and near_deadline?(deadline) do
+    defp await_error({:error, {:stream_error, {:stream_error, code, _human}}}, deadline) do
+      if code == :cancel and GRPC.Client.ResetCode.at_deadline?(deadline) do
         deadline_exceeded()
       else
         GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
-
-        {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+        {:error, GRPC.Client.ResetCode.error(code)}
       end
+    end
+
+    defp await_error({:error, {:stream_error, _other}}, _deadline) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
+      {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "stream reset")}
     end
 
     # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
@@ -988,14 +988,6 @@ if Code.ensure_loaded?(:gun) do
         "The response ended in the middle of a message."
       )
     end
-
-    defp cancel_reset?({:stream_error, :cancel, _}), do: true
-    defp cancel_reset?(_), do: false
-
-    defp near_deadline?(deadline) when is_integer(deadline),
-      do: deadline - @deadline_tolerance <= System.monotonic_time(:millisecond)
-
-    defp near_deadline?(_), do: false
 
     defp deadline(nil), do: :infinity
     defp deadline(:infinity), do: :infinity

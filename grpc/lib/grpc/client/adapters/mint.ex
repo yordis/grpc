@@ -49,7 +49,6 @@ if Code.ensure_loaded?(Mint.HTTP) do
     ]
     @default_transport_opts [timeout: 20_000, nodelay: true]
     @cleanup_timeout 1_000
-    @deadline_tolerance 1
     @unavailable GRPC.Status.unavailable()
 
     @doc """
@@ -420,12 +419,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
-    # A server enforces the `grpc-timeout` it was sent, counted from when the request
-    # reached it, so it never expires before the client's own deadline. A CANCEL reset
-    # that arrives once the deadline has passed is that deadline, whichever side notices
-    # first. The 1ms is only the millisecond truncation of the two clocks.
-    defp reset_at_deadline?(%{payload: %{deadline: deadline}}) when is_integer(deadline),
-      do: System.monotonic_time(:millisecond) >= deadline - @deadline_tolerance
+    defp reset_at_deadline?(%{payload: %{deadline: deadline}}),
+      do: GRPC.Client.ResetCode.at_deadline?(deadline)
 
     defp reset_at_deadline?(_stream), do: false
 
@@ -537,6 +532,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp rpc_error({:error, %Mint.HTTPError{reason: {:server_closed_connection, _, _}} = error}) do
       unavailable(error)
+    end
+
+    defp rpc_error({:error, %Mint.HTTPError{reason: {:server_closed_request, code}}}) do
+      GRPC.Client.ResetCode.error(code)
     end
 
     defp rpc_error({:error, :closed}) do

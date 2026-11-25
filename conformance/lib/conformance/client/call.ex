@@ -127,7 +127,8 @@ defmodule Conformance.Client.Call do
     end
   end
 
-  defp connect_opts(req, adapter) do
+  @doc false
+  def connect_opts(req, adapter) do
     [adapter: adapter, codec: codec(req.codec)]
     |> put_protocol(req)
     |> put_compressor(req.compression)
@@ -139,16 +140,26 @@ defmodule Conformance.Client.Call do
   defp put_protocol(opts, %{protocol: :PROTOCOL_CONNECT} = req) do
     opts
     |> Keyword.put(:protocol, :connect)
-    |> Keyword.put(:adapter_opts, protocols: http_protocols(req.http_version))
+    |> Keyword.put(:adapter_opts, adapter_opts(req))
   end
 
   defp put_protocol(opts, %{protocol: :PROTOCOL_GRPC_WEB} = req) do
     opts
     |> Keyword.put(:protocol, :grpc_web)
-    |> Keyword.put(:adapter_opts, protocols: http_protocols(req.http_version))
+    |> Keyword.put(:adapter_opts, adapter_opts(req))
   end
 
   defp put_protocol(opts, _req), do: opts
+
+  # A shared channel carries one HTTP/1.1 call per connection, so it may open as many
+  # connections as calls run at once. With fewer, the calls over the limit wait for a
+  # connection and fail once the wait is over.
+  defp adapter_opts(req) do
+    [
+      protocols: http_protocols(req.http_version),
+      http1_max_connections: Conformance.Client.Main.max_in_flight()
+    ]
+  end
 
   defp http_protocols(:HTTP_VERSION_1), do: [:http1]
   defp http_protocols(:HTTP_VERSION_2), do: [:http2]

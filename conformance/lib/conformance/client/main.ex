@@ -11,6 +11,11 @@ defmodule Conformance.Client.Main do
   # A call the library never finishes must fail that one case, not stall every case behind it.
   @call_deadline_ms 25_000
 
+  @doc """
+  The most cases that run at once.
+  """
+  def max_in_flight, do: @max_in_flight
+
   def run(adapter) do
     {:ok, out} = Agent.start_link(fn -> nil end)
     {:ok, _} = Conformance.Client.Channels.start_link(name: Conformance.Client.Channels)

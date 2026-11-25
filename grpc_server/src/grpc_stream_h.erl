@@ -49,11 +49,14 @@ init(StreamID, Req=#{ref := Ref}, Opts) ->
 %% connection window only to match requested flow, and a call refused while the
 %% client still had data in flight leaves that data uncredited. Once the window is
 %% empty no data can arrive, no flow is requested, and every call on the connection
-%% waits. One frame of flow up front makes any new stream with a body top up the
-%% window. It also keeps a single frame from exceeding the stream's flow, which
-%% would put the connection flow out of step with its streams'. GHSA-7x9q-vvph-rjcr.
+%% waits. A whole initial window of flow up front tops up the window for any new
+%% stream with a body, and means the client can never send a stream more than it
+%% asked for (the window margins are 0), which would put the connection flow out of
+%% step with its streams'. Streams that then end took back more flow than the
+%% connection counted, and the connection was never topped up again.
+%% GHSA-7x9q-vvph-rjcr.
 initial_flow(#{has_body := true}, Opts) ->
-	[{flow, maps:get(max_frame_size_received, Opts, 16384)}];
+	[{flow, maps:get(initial_stream_window_size, Opts, 65535)}];
 initial_flow(_, _) ->
 	[].
 

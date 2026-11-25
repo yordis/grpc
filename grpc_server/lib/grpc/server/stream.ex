@@ -91,4 +91,7 @@ defmodule GRPC.Server.Stream do
 
   def remaining_ms(%__MODULE__{deadline: deadline}),
     do: max(deadline - System.monotonic_time(:millisecond), 0)
+
+  @doc false
+  def timeout_ms(%__MODULE__{}), do: nil
 end

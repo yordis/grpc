@@ -4,7 +4,10 @@ defmodule GRPC.Integration.ConnectClientUnaryTest do
   alias GRPC.Client.Adapters.Mint
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server,
+      service: Helloworld.Greeter.Service,
+      connect: true,
+      compressors: [GRPC.Compressor.Gzip]
 
     def say_hello(%{name: "fail"}, _stream) do
       raise GRPC.RPCError, status: :not_found, message: "no such greeting"
@@ -56,7 +59,9 @@ defmodule GRPC.Integration.ConnectClientUnaryTest do
           channel = connect(port, adapter_opts: [protocols: protocols])
 
           assert {:error, %GRPC.RPCError{status: 5, message: "no such greeting"}} =
-                   Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{name: "fail"})
+                   Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{
+                     name: "fail"
+                   })
         end)
       end
 

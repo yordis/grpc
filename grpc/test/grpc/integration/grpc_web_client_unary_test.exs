@@ -56,7 +56,9 @@ defmodule GRPC.Integration.GrpcWebClientUnaryTest do
           channel = connect(port, adapter_opts: [protocols: protocols])
 
           assert {:error, %GRPC.RPCError{status: 5, message: "no such greeting"}} =
-                   Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{name: "fail"})
+                   Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{
+                     name: "fail"
+                   })
         end)
       end
 

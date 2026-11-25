@@ -39,7 +39,8 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     http_method = extract_http_method(req)
     exception_log_filter = extract_exception_log_filter_opt(opts)
 
-    with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, server, opts),
+    with {:ok, access_mode, sub_type, content_type} <-
+           find_content_type_subtype(req, server, opts),
          {:ok, codec} <- find_codec(sub_type, content_type, server),
          :ok <- check_connect_get(req, server, route, access_mode),
          :ok <- check_connect_shape(req, server, route, access_mode, opts),
@@ -350,7 +351,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
          {kind, _codec} <-
            GRPC.Server.Connect.parse_content_type(:cowboy_req.header("content-type", req)),
          grpc_type when not is_nil(grpc_type) <- rpc_grpc_type(server, route),
-         false <- (kind == :stream) == (grpc_type != :unary) do
+         false <- kind == :stream == (grpc_type != :unary) do
       {:error,
        {:connect, 415, %{"accept-post" => accept_post(grpc_type)},
         RPCError.exception(

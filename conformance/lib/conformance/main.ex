@@ -73,5 +73,7 @@ defmodule Conformance.Main do
   end
 
   defp client_cert_opts(<<>>), do: []
-  defp client_cert_opts(pem), do: [fail_if_no_peer_cert: true] ++ Conformance.PinnedCert.ssl_opts(pem)
+
+  defp client_cert_opts(pem),
+    do: [fail_if_no_peer_cert: true] ++ Conformance.PinnedCert.ssl_opts(pem)
 end

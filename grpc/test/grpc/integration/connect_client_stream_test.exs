@@ -4,7 +4,11 @@ defmodule GRPC.Integration.ConnectClientStreamTest do
   alias GRPC.Client.Adapters.Mint
 
   defmodule FeatureServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server,
+      service: Routeguide.RouteGuide.Service,
+      connect: true,
+      compressors: [GRPC.Compressor.Gzip]
+
     alias GRPC.Server
 
     def list_features(%{lo: %{latitude: 13}}, _stream) do

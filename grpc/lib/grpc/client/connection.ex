@@ -1355,6 +1355,7 @@ defmodule GRPC.Client.Connection do
   defp resolve_credential(other, _scheme), do: other
 
   defp validate_protocol!(:grpc, _adapter), do: :ok
+
   defp validate_protocol!(protocol, GRPC.Client.Adapters.Mint)
        when protocol in [:connect, :grpc_web],
        do: :ok

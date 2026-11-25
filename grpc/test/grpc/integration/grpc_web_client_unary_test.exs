@@ -1,6 +1,7 @@
 defmodule GRPC.Integration.GrpcWebClientUnaryTest do
   use GRPC.Integration.TestCase, async: false
 
+  alias GRPC.Client.Adapters.Gun
   alias GRPC.Client.Adapters.Mint
 
   defmodule HelloServer do
@@ -18,23 +19,26 @@ defmodule GRPC.Integration.GrpcWebClientUnaryTest do
     end
   end
 
-  def connect(port, opts \\ []) do
+  def connect(port, adapter, opts) do
     {:ok, channel} =
       GRPC.Stub.connect(
         "localhost:#{port}",
-        [adapter: Mint, protocol: :grpc_web] ++ opts
+        [adapter: adapter, protocol: :grpc_web] ++ opts
       )
 
     channel
   end
 
-  for protocols <- [[:http2], [:http1]] do
-    describe "a unary gRPC-Web call over #{inspect(protocols)}" do
-      @describetag protocols: protocols
+  for adapter <- [Mint, Gun], protocols <- [[:http2], [:http1]] do
+    describe "a unary gRPC-Web call with #{inspect(adapter)} over #{inspect(protocols)}" do
+      @describetag protocols: protocols, adapter: adapter
 
-      test "returns the reply with the headers and the trailers", %{protocols: protocols} do
+      test "returns the reply with the headers and the trailers", %{
+        protocols: protocols,
+        adapter: adapter
+      } do
         run_server(HelloServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
 
           assert {:ok, %Helloworld.HelloReply{message: "Hello, connect"},
                   %{headers: headers, trailers: trailers}} =
@@ -51,18 +55,20 @@ defmodule GRPC.Integration.GrpcWebClientUnaryTest do
         end)
       end
 
-      test "returns the error of the server", %{protocols: protocols} do
+      test "returns the error of the server", %{protocols: protocols, adapter: adapter} do
         run_server(HelloServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
 
           assert {:error, %GRPC.RPCError{status: 5, message: "no such greeting"}} =
-                   Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{name: "fail"})
+                   Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{
+                     name: "fail"
+                   })
         end)
       end
 
-      test "compresses the request", %{protocols: protocols} do
+      test "compresses the request", %{protocols: protocols, adapter: adapter} do
         run_server(HelloServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
 
           assert {:ok, %Helloworld.HelloReply{message: "Hello, compressed"}} =
                    Helloworld.Greeter.Stub.say_hello(

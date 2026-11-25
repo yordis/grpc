@@ -1,6 +1,7 @@
 defmodule GRPC.Integration.GrpcWebClientStreamTest do
   use GRPC.Integration.TestCase, async: false
 
+  alias GRPC.Client.Adapters.Gun
   alias GRPC.Client.Adapters.Mint
 
   defmodule FeatureServer do
@@ -36,24 +37,25 @@ defmodule GRPC.Integration.GrpcWebClientStreamTest do
     defp feature(point), do: %Routeguide.Feature{location: point, name: "#{point.latitude}"}
   end
 
-  def connect(port, opts \\ []) do
+  def connect(port, adapter, opts) do
     {:ok, channel} =
-      GRPC.Stub.connect("localhost:#{port}", [adapter: Mint, protocol: :grpc_web] ++ opts)
+      GRPC.Stub.connect("localhost:#{port}", [adapter: adapter, protocol: :grpc_web] ++ opts)
 
     channel
   end
 
   def note(i), do: %Routeguide.RouteNote{message: "Message #{i}"}
 
-  for protocols <- [[:http2], [:http1]] do
-    describe "a streaming gRPC-Web call over #{inspect(protocols)}" do
-      @describetag protocols: protocols
+  for adapter <- [Mint, Gun], protocols <- [[:http2], [:http1]] do
+    describe "a streaming gRPC-Web call with #{inspect(adapter)} over #{inspect(protocols)}" do
+      @describetag protocols: protocols, adapter: adapter
 
       test "a server stream returns the messages, the headers and the trailers", %{
-        protocols: protocols
+        protocols: protocols,
+        adapter: adapter
       } do
         run_server(FeatureServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
           low = %Routeguide.Point{latitude: 1}
           high = %Routeguide.Point{latitude: 2}
 
@@ -72,9 +74,12 @@ defmodule GRPC.Integration.GrpcWebClientStreamTest do
         end)
       end
 
-      test "a server stream ends with the error of the server", %{protocols: protocols} do
+      test "a server stream ends with the error of the server", %{
+        protocols: protocols,
+        adapter: adapter
+      } do
         run_server(FeatureServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
           rect = %Routeguide.Rectangle{lo: %Routeguide.Point{latitude: 13}}
 
           assert {:ok, stream} = Routeguide.RouteGuide.Stub.list_features(channel, rect)
@@ -84,9 +89,9 @@ defmodule GRPC.Integration.GrpcWebClientStreamTest do
         end)
       end
 
-      test "a client stream returns the reply", %{protocols: protocols} do
+      test "a client stream returns the reply", %{protocols: protocols, adapter: adapter} do
         run_server(FeatureServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
 
           stream = Routeguide.RouteGuide.Stub.record_route(channel)
           GRPC.Stub.send_request(stream, %Routeguide.Point{})
@@ -96,9 +101,9 @@ defmodule GRPC.Integration.GrpcWebClientStreamTest do
         end)
       end
 
-      test "a bidi stream sends all, then reads all", %{protocols: protocols} do
+      test "a bidi stream sends all, then reads all", %{protocols: protocols, adapter: adapter} do
         run_server(FeatureServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
 
           stream = Routeguide.RouteGuide.Stub.route_chat(channel)
           GRPC.Stub.send_request(stream, note(1))
@@ -111,9 +116,9 @@ defmodule GRPC.Integration.GrpcWebClientStreamTest do
         end)
       end
 
-      test "a stream compresses its messages", %{protocols: protocols} do
+      test "a stream compresses its messages", %{protocols: protocols, adapter: adapter} do
         run_server(FeatureServer, fn port ->
-          channel = connect(port, adapter_opts: [protocols: protocols])
+          channel = connect(port, adapter, adapter_opts: [protocols: protocols])
 
           stream =
             Routeguide.RouteGuide.Stub.route_chat(channel, compressor: GRPC.Compressor.Gzip)
@@ -127,10 +132,10 @@ defmodule GRPC.Integration.GrpcWebClientStreamTest do
     end
   end
 
-  for protocols <- [[:http2], [:http1]] do
-    test "a client stream canceled before it is closed ends with canceled over #{inspect(protocols)}" do
+  for adapter <- [Mint, Gun], protocols <- [[:http2], [:http1]] do
+    test "a client stream canceled before it is closed ends with canceled with #{inspect(adapter)} over #{inspect(protocols)}" do
       run_server(FeatureServer, fn port ->
-        channel = connect(port, adapter_opts: [protocols: unquote(protocols)])
+        channel = connect(port, unquote(adapter), adapter_opts: [protocols: unquote(protocols)])
 
         stream = Routeguide.RouteGuide.Stub.record_route(channel)
         stream = GRPC.Stub.send_request(stream, %Routeguide.Point{})
@@ -142,17 +147,19 @@ defmodule GRPC.Integration.GrpcWebClientStreamTest do
     end
   end
 
-  test "a bidi stream over HTTP/2 reads a reply before the request ends" do
-    run_server(FeatureServer, fn port ->
-      channel = connect(port, adapter_opts: [protocols: [:http2]])
+  for adapter <- [Mint, Gun] do
+    test "a bidi stream with #{inspect(adapter)} over HTTP/2 reads a reply before the request ends" do
+      run_server(FeatureServer, fn port ->
+        channel = connect(port, unquote(adapter), adapter_opts: [protocols: [:http2]])
 
-      stream = Routeguide.RouteGuide.Stub.route_chat(channel)
-      GRPC.Stub.send_request(stream, note(1))
+        stream = Routeguide.RouteGuide.Stub.route_chat(channel)
+        GRPC.Stub.send_request(stream, note(1))
 
-      assert {:ok, replies} = GRPC.Stub.recv(stream)
-      assert [{:ok, %{message: "Reply: Message 1"}}] = Enum.take(replies, 1)
+        assert {:ok, replies} = GRPC.Stub.recv(stream)
+        assert [{:ok, %{message: "Reply: Message 1"}}] = Enum.take(replies, 1)
 
-      GRPC.Stub.send_request(stream, note(2), end_stream: true)
-    end)
+        GRPC.Stub.send_request(stream, note(2), end_stream: true)
+      end)
+    end
   end
 end

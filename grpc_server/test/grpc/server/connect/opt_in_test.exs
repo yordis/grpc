@@ -7,26 +7,29 @@ defmodule GRPC.Server.Connect.OptInTest do
   alias GRPC.Test.ConnectClient
 
   defmodule PlainServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Transcode.Messaging.Service, http_transcode: true
 
-    def say_hello(%{name: "missing"}, _stream) do
+    def create_message(%{name: "missing"}, _stream) do
       raise GRPC.RPCError, status: :not_found, message: "no such name"
     end
 
-    def say_hello(req, _stream), do: %Helloworld.HelloReply{message: "Hello, #{req.name}"}
+    def create_message(req, _stream), do: %Transcode.Message{name: req.name, text: "created"}
   end
 
   defmodule ConnectServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
+    use GRPC.Server,
+      service: Transcode.Messaging.Service,
+      http_transcode: true,
+      connect: true
 
-    def say_hello(%{name: "missing"}, _stream) do
+    def create_message(%{name: "missing"}, _stream) do
       raise GRPC.RPCError, status: :not_found, message: "no such name"
     end
 
-    def say_hello(req, _stream), do: %Helloworld.HelloReply{message: "Hello, #{req.name}"}
+    def create_message(req, _stream), do: %Transcode.Message{name: req.name, text: "created"}
   end
 
-  @path "/helloworld.Greeter/SayHello"
+  @path "/transcode.Messaging/CreateMessage"
 
   defp post(port, version, content_type, body) do
     ConnectClient.request(
@@ -63,7 +66,7 @@ defmodule GRPC.Server.Connect.OptInTest do
           response = post(port, unquote(version), "application/json", ~s({"name":"Ann"}))
 
           assert response.status == 200
-          assert response.body =~ "Hello, Ann"
+          assert response.body =~ "created"
         end)
       end
 

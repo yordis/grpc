@@ -70,7 +70,13 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp request_on_lane(pid, {scheme, host, port, connect_opts}, request) do
       lane_opts = connect_opts |> Keyword.delete(:parent) |> Keyword.put(:lane?, true)
 
-      with {:ok, token} <- HTTP1Lanes.acquire(pid) do
+      {:request, _method, _path, _headers, _body, request_opts} = request
+
+      with {:ok, token} <-
+             HTTP1Lanes.acquire(pid,
+               deadline: request_opts[:deadline],
+               cancel: request_opts[:cancel]
+             ) do
         case GenServer.start(__MODULE__, {scheme, host, port, lane_opts}) do
           {:ok, lane} ->
             try do
@@ -189,12 +195,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
-    def handle_call(:reserve_lane, from, state) do
-      case HTTP1Lanes.reserve(state.lanes, from) do
-        {:reply, reply, lanes} -> {:reply, reply, %{state | lanes: lanes}}
-        {:noreply, lanes} -> {:noreply, %{state | lanes: lanes}}
-      end
-    end
+    def handle_call({:give_up, tag}, _from, state),
+      do: {:reply, :ok, %{state | lanes: HTTP1Lanes.give_up(state.lanes, tag)}}
 
     def handle_call({:attach_lane, token, lane}, _from, state) do
       case HTTP1Lanes.attach_lane(state.lanes, token, lane) do
@@ -366,6 +368,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
+    def handle_cast({:reserve_lane, caller, tag}, state),
+      do: {:noreply, %{state | lanes: HTTP1Lanes.reserve(state.lanes, caller, tag)}}
+
     def handle_cast({:release_lane, token}, state),
       do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, token)}}
 

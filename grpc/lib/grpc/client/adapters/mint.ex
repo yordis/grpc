@@ -74,7 +74,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
       * `:http1_max_connections`: the most connections the channel opens over HTTP/1.1, default `8`.
         HTTP/1.1 carries one call at a time on a connection, so a call that finds the channel's
         connection busy opens another one for itself, up to this limit. Calls over it wait for a
-        connection to free, and fail with `UNAVAILABLE` after 5 seconds. HTTP/2 ignores it.
+        connection to free, for at most 5 seconds or until their own deadline or cancel, and fail with
+        `UNAVAILABLE` (or `DEADLINE_EXCEEDED`, `CANCELLED`). An integer of 2 or more. HTTP/2 ignores it.
       * `:protocols`: for `protocol: :connect` and `protocol: :grpc_web`, a non-empty list of the HTTP
         versions to allow, from `:http1` and `:http2`. With `https://` the version is negotiated with
         ALPN, and the default allows both. With `http://` there is no negotiation: the adapter speaks
@@ -204,6 +205,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
+    # A call that failed before it was sent has nothing to cancel.
+    def cancel(%{payload: %{response: {:error, _error}}}), do: :ok
+
     def cancel(stream) do
       %{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream
 
@@ -590,7 +594,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
         try do
           ConnectionProcess.request(pid, method, path, headers, body,
             stream_response_pid: stream_response_pid,
-            protocol: stream.channel.protocol
+            protocol: stream.channel.protocol,
+            deadline: request_deadline(opts[:deadline] || opts[:timeout]),
+            cancel: opts[:cancel]
           )
         catch
           :exit, reason ->
@@ -615,6 +621,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp request_deadline(timeout) when is_integer(timeout),
       do: System.monotonic_time(:millisecond) + max(timeout, 0)
+
+    defp request_deadline(milliseconds) when is_number(milliseconds),
+      do: System.monotonic_time(:millisecond) + max(0, round(milliseconds))
 
     defp request_deadline(_timeout), do: nil
 

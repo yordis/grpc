@@ -29,8 +29,9 @@ if Code.ensure_loaded?(:gun) do
       * `:http1_max_connections` - the most connections the channel opens over HTTP/1.1
         (default: `8`). HTTP/1.1 carries one call at a time on a connection, so a call that
         finds the channel's connection busy opens another one for itself, up to this limit.
-        Calls over it wait for a connection to free, and fail with `UNAVAILABLE` after
-        5 seconds. HTTP/2 ignores it.
+        Calls over it wait for a connection to free, for at most
+        5 seconds or until their own deadline or cancel, and fail with `UNAVAILABLE`
+        (or `DEADLINE_EXCEEDED`, `CANCELLED`). An integer of 2 or more. HTTP/2 ignores it.
 
       * `:response_window` - bytes of a response the adapter reads ahead of the
         caller, per stream (default: `1_048_576`). The least value is `16_384`, one
@@ -287,7 +288,9 @@ if Code.ensure_loaded?(:gun) do
       {method, path, headers, data} = request_parts(stream, path, message, opts)
 
       case call_connection(conn_pid, fn ->
-             ConnectionProcess.request(conn_pid, method, path, headers, data, deadline)
+             ConnectionProcess.request(conn_pid, method, path, headers, data, deadline,
+               cancel: opts[:cancel]
+             )
            end) do
         {:ok, %{stream_ref: stream_ref, response_pid: response_pid} = response} ->
           {:ok, stream_ref, response_pid, response[:conn_pid]}
@@ -339,7 +342,9 @@ if Code.ensure_loaded?(:gun) do
       headers = request_headers(stream, opts, "POST")
 
       case call_connection(conn_pid, fn ->
-             ConnectionProcess.open_stream(conn_pid, path, headers, deadline)
+             ConnectionProcess.open_stream(conn_pid, path, headers, deadline,
+               cancel: opts[:cancel]
+             )
            end) do
         {:ok, %{stream_ref: stream_ref, response_pid: response_pid} = response} ->
           stream
@@ -1088,6 +1093,11 @@ if Code.ensure_loaded?(:gun) do
           {reason, {GenServer, :call, _}} -> {:error, reason}
           reason -> {:error, reason}
         end
+    end
+
+    defp put_request_error(stream, %GRPC.RPCError{} = error) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:local_pre_send, :connection_unavailable)
+      GRPC.Client.Stream.put_payload(stream, :request_error, error)
     end
 
     defp put_request_error(stream, reason) do

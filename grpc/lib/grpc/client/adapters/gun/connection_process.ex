@@ -75,26 +75,34 @@ if Code.ensure_loaded?(:gun) do
     # Calls carrying headers or bodies go through `Adapter.call/3`, so an exit (busy or dead
     # connection process) does not leak them into logs and telemetry.
     def request(connection_process_pid, path, headers, body, deadline \\ :infinity) do
-      request(connection_process_pid, "POST", path, headers, body, deadline)
+      request(connection_process_pid, "POST", path, headers, body, deadline, [])
     end
 
     # A request without a body, such as a Connect GET, has `nil` as the body.
-    def request(connection_process_pid, method, path, headers, body, deadline) do
+    # `opts[:cancel]` is the cancel handle of the call. A call that waits for a connection
+    # of the channel stops waiting when it is cancelled or its deadline passes.
+    def request(connection_process_pid, method, path, headers, body, deadline, opts \\ []) do
       request = {:request, method, path, headers, body, deadline}
-      connection_process_pid |> Adapter.call(request) |> on_lane(connection_process_pid, request)
+
+      connection_process_pid
+      |> Adapter.call(request)
+      |> on_lane(connection_process_pid, request, opts)
     end
 
-    def open_stream(connection_process_pid, path, headers, deadline \\ :infinity) do
+    def open_stream(connection_process_pid, path, headers, deadline \\ :infinity, opts \\ []) do
       request = {:open_stream, path, headers, deadline}
-      connection_process_pid |> Adapter.call(request) |> on_lane(connection_process_pid, request)
+
+      connection_process_pid
+      |> Adapter.call(request)
+      |> on_lane(connection_process_pid, request, opts)
     end
 
     # HTTP/1.1 carries one request at a time on a connection. A call that finds the
     # connection busy gets a connection of its own, for that one call. The reply
     # carries the pid that holds the stream, and the data, cancel and deadline calls
     # go to it.
-    defp on_lane({:busy, {channel, open_opts}}, pid, request) do
-      with {:ok, token} <- acquire_lane(pid) do
+    defp on_lane({:busy, {channel, open_opts}}, pid, request, opts) do
+      with {:ok, token} <- acquire_lane(pid, request, opts) do
         case GenServer.start(__MODULE__, {channel, Map.put(open_opts, :lane?, true)}) do
           {:ok, lane} ->
             try do
@@ -124,13 +132,13 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
-    defp on_lane(reply, _pid, _request), do: reply
+    defp on_lane(reply, _pid, _request, _opts), do: reply
 
-    defp acquire_lane(pid) do
-      case HTTP1Lanes.acquire(pid) do
-        {:error, %GRPC.RPCError{message: message}} -> {:error, message}
-        reply -> reply
-      end
+    defp acquire_lane(pid, request, opts) do
+      deadline = elem(request, tuple_size(request) - 1)
+      deadline = if is_integer(deadline), do: deadline
+
+      HTTP1Lanes.acquire(pid, deadline: deadline, cancel: opts[:cancel])
     end
 
     defp stop_lane(lane) do
@@ -225,12 +233,8 @@ if Code.ensure_loaded?(:gun) do
       {:noreply, %{state | waiters: [from | state.waiters]}}
     end
 
-    def handle_call(:reserve_lane, from, state) do
-      case HTTP1Lanes.reserve(state.lanes, from) do
-        {:reply, reply, lanes} -> {:reply, reply, %{state | lanes: lanes}}
-        {:noreply, lanes} -> {:noreply, %{state | lanes: lanes}}
-      end
-    end
+    def handle_call({:give_up, tag}, _from, state),
+      do: {:reply, :ok, %{state | lanes: HTTP1Lanes.give_up(state.lanes, tag)}}
 
     def handle_call({:attach_lane, token, lane}, _from, state) do
       case HTTP1Lanes.attach_lane(state.lanes, token, lane) do
@@ -280,6 +284,9 @@ if Code.ensure_loaded?(:gun) do
     end
 
     @impl GenServer
+    def handle_cast({:reserve_lane, caller, tag}, state),
+      do: {:noreply, %{state | lanes: HTTP1Lanes.reserve(state.lanes, caller, tag)}}
+
     def handle_cast({:release_lane, token}, state),
       do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, token)}}
 

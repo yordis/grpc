@@ -144,6 +144,66 @@ defmodule GRPC.Integration.Http1ConcurrencyTest do
         end)
       end
 
+      test "a call waiting for a connection ends at its own deadline", %{
+        connect_opts: connect_opts
+      } do
+        run_server([HelloServer, RouteServer], fn port ->
+          channel = connect(port, connect_opts, http1_max_connections: 2)
+          handles = for _ <- 1..2, do: GRPC.Stub.new_cancel_handle()
+
+          hung =
+            for handle <- handles,
+                do: Task.async(fn -> hello(channel, "hang", cancel: handle, timeout: 8_000) end)
+
+          Process.sleep(300)
+
+          {micros, result} = :timer.tc(fn -> hello(channel, "after", timeout: 300) end)
+
+          assert {:error, %RPCError{status: @deadline_exceeded}} = result
+          assert micros < 1_500_000
+
+          for handle <- handles, do: GRPC.Stub.cancel(handle)
+          Task.await_many(hung, 5_000)
+        end)
+      end
+
+      test "cancelling a call that waits for a connection ends it and frees nothing else", %{
+        connect_opts: connect_opts
+      } do
+        run_server([HelloServer, RouteServer], fn port ->
+          channel = connect(port, connect_opts, http1_max_connections: 2)
+          handles = for _ <- 1..2, do: GRPC.Stub.new_cancel_handle()
+
+          hung =
+            for handle <- handles,
+                do: Task.async(fn -> hello(channel, "hang", cancel: handle, timeout: 8_000) end)
+
+          Process.sleep(300)
+
+          queued_handle = GRPC.Stub.new_cancel_handle()
+
+          queued =
+            Task.async(fn -> hello(channel, "after", cancel: queued_handle, timeout: 8_000) end)
+
+          Process.sleep(200)
+          {micros, :ok} = :timer.tc(fn -> GRPC.Stub.cancel(queued_handle) end)
+          assert micros < 500_000
+
+          {wait, result} = :timer.tc(fn -> Task.await(queued, 3_000) end)
+          assert {:error, %RPCError{status: @cancelled}} = result
+          assert wait < 1_000_000
+
+          # The call that was cancelled did not take a connection of the channel.
+          assert :ok = GRPC.Stub.cancel(hd(handles))
+
+          assert {:ok, %Helloworld.HelloReply{message: "Hello, after"}} =
+                   hello(channel, "after", timeout: 3_000)
+
+          GRPC.Stub.cancel(List.last(handles))
+          Task.await_many(hung, 5_000)
+        end)
+      end
+
       test "opens at most :http1_max_connections connections", %{connect_opts: connect_opts} do
         start_supervised!(Gauge)
 

@@ -102,7 +102,7 @@ defmodule GRPC.Client.ConnectionTest do
       monitor_ref = Process.monitor(pid)
       assert_receive {:DOWN, ^monitor_ref, :process, ^pid, _reason}, 500
 
-      assert_no_new_children(children_before)
+      assert_no_new_children(children_before, [ref])
     end
   end
 
@@ -167,7 +167,7 @@ defmodule GRPC.Client.ConnectionTest do
 
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, _reason}, 500
 
-      assert_no_new_children(children_before)
+      assert_no_new_children(children_before, [ref])
     end
 
     test "pick_channel returns {:error, :no_connection} after disconnect (persistent_term entry is erased)",
@@ -273,20 +273,22 @@ defmodule GRPC.Client.ConnectionTest do
       :erlang.garbage_collect(supervisor)
       {:memory, before_memory} = Process.info(supervisor, :memory)
 
-      for cycle <- 1..50 do
-        ref = make_ref()
-        header = {"x-test-data", :binary.copy(<<cycle>>, 100_000)}
+      refs =
+        for cycle <- 1..50 do
+          ref = make_ref()
+          header = {"x-test-data", :binary.copy(<<cycle>>, 100_000)}
 
-        {:ok, channel} =
-          Connection.connect(target, adapter: adapter, name: ref, headers: [header])
+          {:ok, channel} =
+            Connection.connect(target, adapter: adapter, name: ref, headers: [header])
 
-        {:ok, _} = Connection.disconnect(channel)
-      end
+          {:ok, _} = Connection.disconnect(channel)
+          ref
+        end
 
       :erlang.garbage_collect(supervisor)
       {:memory, after_memory} = Process.info(supervisor, :memory)
 
-      assert_no_new_children(children_before)
+      assert_no_new_children(children_before, refs)
 
       # Residual heap after one GC is typically tens of KB; real header leaks are MBs.
       assert after_memory <= before_memory + 250_000,
@@ -463,10 +465,17 @@ defmodule GRPC.Client.ConnectionTest do
     for {_, pid, _, _} <- DynamicSupervisor.which_children(GRPC.Client.Supervisor), do: pid
   end
 
-  # Children leaked by other tests may exit while this one runs, so only
-  # children this test started are checked, not the global count.
-  defp assert_no_new_children(children_before) do
-    assert supervisor_child_pids() -- children_before == []
+  # Connections leaked by other tests may exit while this one runs, or dial again
+  # and start a new connection process, so only the children registered under the
+  # refs this test used are checked, not every child of the supervisor.
+  defp assert_no_new_children(children_before, refs) do
+    started =
+      for pid <- supervisor_child_pids() -- children_before,
+          {Connection, ref} <- Registry.keys(GRPC.Client.Registry, pid),
+          ref in refs,
+          do: pid
+
+    assert started == []
   end
 
   defp connection_pt_count do

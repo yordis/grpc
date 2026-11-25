@@ -56,15 +56,16 @@ defmodule GRPC.Client.Connect do
     compressor = opts[:compressor] || stream.compressor
 
     query =
-      [
-        {"connect", "v1"},
-        {"encoding", codec_name(stream.codec)},
-        {"message", Base.url_encode64(unary_body(message, compressor), padding: false)},
-        {"base64", "1"}
-      ]
-      |> then(fn query ->
-        if compressor, do: query ++ [{"compression", compressor.name()}], else: query
-      end)
+      Enum.reject(
+        [
+          {"connect", "v1"},
+          {"base64", "1"},
+          {"compression", compressor && compressor.name()},
+          {"encoding", codec_name(stream.codec)},
+          {"message", Base.url_encode64(unary_body(message, compressor), padding: false)}
+        ],
+        fn {_key, value} -> is_nil(value) end
+      )
 
     stream.path <> "?" <> URI.encode_query(query)
   end

@@ -233,7 +233,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
         _from,
         %{responses: responses} = state
       ) do
-    {:reply, :ok, %{state | responses: :queue.in(error, responses), terminated: true},
+    # An error ends the stream: the request is reset after it, so no `:done` follows.
+    {:reply, :ok, %{state | responses: :queue.in(error, responses), terminated: true, done: true},
      {:continue, :produce_response}}
   end
 

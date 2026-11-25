@@ -183,7 +183,6 @@ defmodule GRPC.Message do
   end
 
   # The length prefix is checked before the message is sliced out of the buffer.
-  defp check_length(data, max_length \\ nil)
 
   defp check_length(<<_flag::8, length::big-32, _::binary>>, max_length) do
     max_length = max_length || max_message_length()

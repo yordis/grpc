@@ -61,6 +61,7 @@ if Code.ensure_loaded?(:gun) do
     alias GRPC.Client.Adapter
     alias GRPC.Client.Connect
     alias GRPC.Client.Adapters.Gun.ConnectionProcess
+    alias GRPC.Client.Adapters.Gun.ReplyReader
 
     @default_tcp_opts [nodelay: true]
     @max_retries 100
@@ -430,7 +431,7 @@ if Code.ensure_loaded?(:gun) do
 
       case connect_headers(state) do
         {:ok, headers, state} ->
-          replies = connect_replies(state)
+          replies = connect_replies(state, type)
 
           if opts[:return_headers],
             do: {:ok, replies, %{headers: headers}},
@@ -507,14 +508,20 @@ if Code.ensure_loaded?(:gun) do
 
     # The replies of a streaming call are read from the response once, however many times
     # the caller enumerates them, as a caller does that reads a reply after each request of
-    # a bidi stream. The state of the read is in an agent, linked to the caller, that goes
-    # away with the last item.
-    defp connect_replies(state) do
-      {:ok, agent} = Agent.start_link(fn -> state end)
-      Stream.resource(fn -> agent end, &connect_take/1, fn _agent -> :ok end)
+    # a bidi stream. The state of the read is in a process that goes away with the caller, or
+    # with the last item. A caller that stops reading a server stream before its end has no
+    # use for the rest of it, so the request is reset.
+    defp connect_replies(state, type) do
+      {:ok, reader} = ReplyReader.start(state)
+
+      Stream.resource(
+        fn -> reader end,
+        &connect_take/1,
+        &connect_release(&1, type)
+      )
     end
 
-    defp connect_take(agent) do
+    defp connect_take(reader) do
       take = fn state ->
         case connect_next(state) do
           nil -> {:halt, state}
@@ -522,16 +529,25 @@ if Code.ensure_loaded?(:gun) do
         end
       end
 
-      case Agent.get_and_update(agent, take, :infinity) do
-        {:item, item} ->
-          {[item], agent}
-
-        :halt ->
-          Agent.stop(agent)
-          {:halt, agent}
+      case ReplyReader.get_and_update(reader, take) do
+        {:item, item} -> {[item], reader}
+        :halt -> {:halt, reader}
       end
     catch
-      :exit, _reason -> {:halt, agent}
+      :exit, _reason -> {:halt, reader}
+    end
+
+    defp connect_release(reader, type) do
+      if type == :server_stream do
+        ReplyReader.get_and_update(reader, fn state ->
+          unless state.done, do: cancel(state.stream)
+          {:ok, %{state | done: true}}
+        end)
+      end
+
+      ReplyReader.stop(reader)
+    catch
+      :exit, _reason -> :ok
     end
 
     # The next item of a streaming call. An error is the last one.

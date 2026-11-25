@@ -24,8 +24,11 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
   use GenServer
 
+  # The process that starts it owns it. It ends when the owner does, whatever the reason: a
+  # link does not carry a normal exit, and nobody is left to read what it buffers. The
+  # connection process sees it end and resets the request.
   def start_link(stream, send_headers_or_trailers?) do
-    GenServer.start_link(__MODULE__, {stream, send_headers_or_trailers?})
+    GenServer.start_link(__MODULE__, {stream, send_headers_or_trailers?, self()})
   end
 
   @doc """
@@ -120,8 +123,11 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # Callbacks
 
   @impl true
-  def init({stream, send_headers_or_trailers?}) do
+  def init({stream, send_headers_or_trailers?, owner}) do
+    owner_monitor = Process.monitor(owner)
+
     state = %{
+      owner_monitor: owner_monitor,
       grpc_stream: stream,
       send_headers_or_trailers: send_headers_or_trailers?,
       buffer: <<>>,
@@ -286,6 +292,16 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   def handle_call({:consume_response, :done}, _from, state) do
     {:reply, :ok, %{state | done: true}, {:continue, :produce_response}}
   end
+
+  @impl true
+  def handle_info(
+        {:DOWN, owner_monitor, :process, _owner, _reason},
+        %{owner_monitor: owner_monitor} = state
+      ) do
+    {:stop, :normal, state}
+  end
+
+  def handle_info(_message, state), do: {:noreply, state}
 
   @impl true
   def handle_continue(:produce_response, state) do

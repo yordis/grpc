@@ -3,9 +3,44 @@
 # Usage: bin/capture <dir> <program> [args...]
 # Writes, per run of the program, <dir>/<time>.<pid>.in (bytes read from stdin), .out (bytes
 # written to stdout) and .err (stderr, with the start time, the end time and the exit status).
+#
+# The runner stops a server by killing the process it started, this script. The program then
+# stops too: on SIGTERM, SIGINT or SIGHUP this script passes SIGTERM on, and when it is gone
+# for good (SIGKILL) a watcher does. Otherwise the program, which serves until it is told to
+# stop, and the tee processes on its pipes would run on for good.
 dir="$1"; shift
 mkdir -p "$dir"
 base="$dir/$(date +%H%M%S).$$"
 printf '%s start: %s\n' "$(date +%T)" "$*" > "$base.err"
-{ tee "$base.in" | { "$@" 2>> "$base.err"; echo "$?" > "$base.status"; } | tee "$base.out"; } || true
-printf '%s end: status %s\n' "$(date +%T)" "$(cat "$base.status" 2>/dev/null)" >> "$base.err"
+
+stop() {
+  if [ -f "$base.pid" ]; then kill -TERM "$(cat "$base.pid")" 2>/dev/null; fi
+}
+
+finish() {
+  printf '%s end: status %s\n' "$(date +%T)" "$(cat "$base.status" 2>/dev/null)" >> "$base.err"
+}
+
+# An asynchronous list reads /dev/null unless told otherwise, so the pipeline gets stdin
+# through fd 3. The program records its pid before it starts, for `stop`.
+exec 3<&0
+{
+  tee "$base.in" | {
+    sh -c 'echo "$$" > "$0"; exec "$@"' "$base.pid" "$@" 2>> "$base.err"
+    echo "$?" > "$base.status"
+  } | tee "$base.out"
+} <&3 3<&- &
+job=$!
+exec 3<&-
+
+parent=$$
+(
+  while kill -0 "$parent" 2>/dev/null; do sleep 1; done
+  stop
+) </dev/null >/dev/null 2>&1 &
+watcher=$!
+
+trap 'stop; wait "$job"; kill "$watcher" 2>/dev/null; finish; exit 143' TERM INT HUP
+wait "$job"
+kill "$watcher" 2>/dev/null
+finish

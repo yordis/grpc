@@ -16,7 +16,7 @@ defmodule GRPC.Integration.ClientDeadlineResetTest do
 
       test "a server reset with CANCEL as the deadline arrives is DEADLINE_EXCEEDED",
            %{adapter: adapter} do
-        port = ScriptedH2Server.start([{:sleep, 450}, {:rst, @cancel}])
+        port = ScriptedH2Server.start([{:sleep, 510}, {:rst, @cancel}])
         channel = ScriptedH2Server.connect(port, adapter)
 
         assert {:error, %GRPC.RPCError{status: @deadline_exceeded}} =

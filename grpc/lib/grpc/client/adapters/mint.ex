@@ -48,7 +48,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     ]
     @default_transport_opts [timeout: 20_000, nodelay: true]
     @cleanup_timeout 1_000
-    @deadline_tolerance 100
+    @deadline_tolerance 1
     @unavailable GRPC.Status.unavailable()
 
     @doc """
@@ -377,8 +377,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
-    # A server enforces the deadline it was sent a little after the client's own, and
-    # resets the stream with CANCEL. Next to the deadline, that reset is the deadline.
+    # A server enforces the `grpc-timeout` it was sent, counted from when the request
+    # reached it, so it never expires before the client's own deadline. A CANCEL reset
+    # that arrives once the deadline has passed is that deadline, whichever side notices
+    # first. The 1ms is only the millisecond truncation of the two clocks.
     defp reset_at_deadline?(started, request_type, opts) do
       case recv_timeout(request_type, opts) do
         timeout when is_integer(timeout) ->

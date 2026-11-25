@@ -65,7 +65,7 @@ if Code.ensure_loaded?(:gun) do
     @max_retries 100
     # Default of `:response_window`, in bytes.
     @default_response_window 1_048_576
-    @deadline_tolerance 100
+    @deadline_tolerance 1
     # One frame. A smaller window stalls a cowlib peer, which holds data back
     # while the stream window is under 16,384 bytes and the data does not fit.
     @min_response_window 16_384
@@ -477,8 +477,9 @@ if Code.ensure_loaded?(:gun) do
         {:error, {:connection_error, msg}} ->
           connection_error(msg)
 
-        # A server enforces the deadline it was sent a little after the client's own, and
-        # resets the stream with CANCEL. Next to the deadline, that reset is the deadline.
+        # A server enforces the `grpc-timeout` it was sent from when the request reached it,
+        # so never before the client's own deadline. A CANCEL reset once the deadline has
+        # passed is that deadline, whichever side notices first.
         {:error, {:stream_error, msg}} ->
           if cancel_reset?(msg) and near_deadline?(deadline) do
             deadline_exceeded()

@@ -6,8 +6,14 @@
 
   * The optional `:gun` dependency is now `~> 2.8.0` (was `~> 2.7.0`), with cowlib 2.22.0. Gun 2.7 and earlier crash on a DATA frame that cowlib 2.22 reports for a stream that was already reset, and gun 2.8 handles it, so an app on cowlib 2.22 or later needs gun 2.8. Gun 2.8 requires cowlib 2.22.0 or newer. The lock files now use cowboy 2.21.0, the first cowboy that handles the same cowlib 2.22 return value.
 
+  * A server stream reset (RST_STREAM) now fails the call with the status of the gRPC HTTP/2 spec, the same on the Mint and Gun adapters: `UNAVAILABLE` for REFUSED_STREAM, `CANCELLED` for CANCEL, `RESOURCE_EXHAUSTED` for ENHANCE_YOUR_CALM, `PERMISSION_DENIED` for INADEQUATE_SECURITY and `INTERNAL` for the rest. The message names the code and no longer holds internal terms.
+  * The process that buffers the reply of a Mint call now ends with the process that made the call, and the request is reset. A server stream that the caller stops reading (`Enum.take/2`) is reset on Mint and Gun.
+
 ### Bug Fixes
 
+  * A reply that cannot be decompressed fails with `INTERNAL` on every adapter and protocol, through one shared path.
+  * A Connect error body is bounded (the receive limit, at most 64 KiB) and fails the call cleanly when it is larger.
+  * The Gun adapter no longer leaks the process that reads the replies of a streaming Connect or gRPC-Web call.
   * The Mint adapter no longer leaks a `StreamResponseProcess` when the call to the connection process exits, because the process is gone, dies during the call, or takes longer than the call timeout.
 
 ## v1.1.0 - 2026-11-13

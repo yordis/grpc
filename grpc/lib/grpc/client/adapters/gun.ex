@@ -458,53 +458,61 @@ if Code.ensure_loaded?(:gun) do
         trailers = {:trailers, _} ->
           trailers
 
-        {:error, :timeout} ->
-          deadline_exceeded()
-
-        {:error, :canceled} ->
-          {:error, GRPC.RPCError.exception(GRPC.Status.cancelled(), "Canceled by the client")}
-
-        # Connection-level failures are UNAVAILABLE per the gRPC status spec:
-        # the RPC never completed on a live connection, so callers can safely
-        # retry (deadline errors above stay DEADLINE_EXCEEDED).
-        {:error, {:connection_error, :closed}} when is_integer(deadline) ->
-          if deadline <= System.monotonic_time(:millisecond) do
-            deadline_exceeded()
-          else
-            connection_error(:closed)
-          end
-
-        {:error, {:connection_error, msg}} ->
-          connection_error(msg)
-
-        # A server enforces the `grpc-timeout` it was sent from when the request reached it,
-        # so never before the client's own deadline. A CANCEL reset once the deadline has
-        # passed is that deadline, whichever side notices first.
-        {:error, {:stream_error, msg}} ->
-          if cancel_reset?(msg) and near_deadline?(deadline) do
-            deadline_exceeded()
-          else
-            GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
-
-            {:error,
-             GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
-          end
-
-        # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
-        {:error, {reason, msg}} when reason in [:down, :noproc, :normal, :shutdown] ->
-          connection_error({reason, msg})
-
-        {:error, {reason, msg}} ->
-          {:error,
-           GRPC.RPCError.exception(GRPC.Status.unknown(), "#{inspect(reason)}: #{inspect(msg)}")}
-
-        other ->
-          {:error,
-           GRPC.RPCError.exception(
-             GRPC.Status.unknown(),
-             "unexpected message when waiting for server: #{inspect(other)}"
-           )}
+        error ->
+          await_error(error, deadline)
       end
+    end
+
+    defp await_error({:error, :timeout}, _deadline), do: deadline_exceeded()
+
+    defp await_error({:error, :canceled}, _deadline) do
+      {:error, GRPC.RPCError.exception(GRPC.Status.cancelled(), "Canceled by the client")}
+    end
+
+    # Connection-level failures are UNAVAILABLE per the gRPC status spec:
+    # the RPC never completed on a live connection, so callers can safely
+    # retry (deadline errors above stay DEADLINE_EXCEEDED).
+    defp await_error({:error, {:connection_error, :closed}}, deadline)
+         when is_integer(deadline) do
+      if deadline <= System.monotonic_time(:millisecond) do
+        deadline_exceeded()
+      else
+        connection_error(:closed)
+      end
+    end
+
+    defp await_error({:error, {:connection_error, msg}}, _deadline), do: connection_error(msg)
+
+    # A server enforces the `grpc-timeout` it was sent from when the request reached it,
+    # so never before the client's own deadline. A CANCEL reset once the deadline has
+    # passed is that deadline, whichever side notices first.
+    defp await_error({:error, {:stream_error, msg}}, deadline) do
+      if cancel_reset?(msg) and near_deadline?(deadline) do
+        deadline_exceeded()
+      else
+        GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
+
+        {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+      end
+    end
+
+    # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
+    defp await_error({:error, {reason, msg}}, _deadline)
+         when reason in [:down, :noproc, :normal, :shutdown] do
+      connection_error({reason, msg})
+    end
+
+    defp await_error({:error, {reason, msg}}, _deadline) do
+      {:error,
+       GRPC.RPCError.exception(GRPC.Status.unknown(), "#{inspect(reason)}: #{inspect(msg)}")}
+    end
+
+    defp await_error(other, _deadline) do
+      {:error,
+       GRPC.RPCError.exception(
+         GRPC.Status.unknown(),
+         "unexpected message when waiting for server: #{inspect(other)}"
+       )}
     end
 
     defp response_headers(200, headers, fin) do

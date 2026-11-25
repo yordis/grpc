@@ -27,14 +27,15 @@ shift
 
 # The runner starts a program per test case for as long as the run lasts, and another run's
 # compile may rewrite the shared build meanwhile. Give this run its own copy, taken under the
-# build lock so it is never half written, and remove it when the run ends.
+# build lock so it is never half written, and remove it when the run ends. Links left
+# dangling by a removed priv directory point nowhere and would fail the copy, so they go first.
 shared="$here/_build/${CONFORMANCE_ENV:-dev}/lib"
 CONFORMANCE_BUILD="$(mktemp -d "${TMPDIR:-/tmp}/conformance-build.XXXXXX")"
 export CONFORMANCE_BUILD
 trap 'rm -rf "$CONFORMANCE_BUILD"' EXIT
 trap 'exit 130' INT TERM
 (cd "$here" && SHARED="$shared" mix run --no-compile --no-deps-check -e \
-  'Mix.Project.with_build_lock(fn -> {_, 0} = System.cmd("cp", ["-RL", System.fetch_env!("SHARED") <> "/.", System.fetch_env!("CONFORMANCE_BUILD")]) end)') >&2 </dev/null
+  'Mix.Project.with_build_lock(fn -> {_, 0} = System.cmd("sh", ["-c", "find -L \"$SHARED\" -type l -exec rm {} + ; cp -RL \"$SHARED/.\" \"$CONFORMANCE_BUILD\""]) end)') >&2 </dev/null
 
 name="$(basename "$config" .yaml)"
 case "$name" in

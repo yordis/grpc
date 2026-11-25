@@ -26,4 +26,8 @@ $1
 
 set --
 for ebin in "$build"/*/ebin; do set -- -pa "$ebin" "$@"; done
-exec elixir "$@" --no-halt -e "$expr"
+# -noinput keeps the VM from reading standard input itself. Left to it, the VM reads and
+# decodes the runner's first bytes as UTF-8 before any program can ask for them, so the
+# program reads them from file descriptor 0 (Conformance.Protocol) and gets nothing or
+# mangled bytes.
+exec elixir --erl "-noinput" "$@" --no-halt -e "$expr"

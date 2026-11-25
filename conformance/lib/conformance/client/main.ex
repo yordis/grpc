@@ -12,20 +12,19 @@ defmodule Conformance.Client.Main do
   @call_deadline_ms 25_000
 
   def run(adapter) do
-    # Treat stdin/stdout as raw bytes: the default device re-encodes as UTF-8.
-    :ok = :io.setopts(:standard_io, [:binary, encoding: :latin1])
     {:ok, out} = Agent.start_link(fn -> nil end)
 
-    loop(adapter, out, 0)
+    loop(Conformance.Protocol.open_input(), adapter, out, 0)
     System.halt(0)
   end
 
-  defp loop(adapter, out, in_flight) do
-    case read_request() do
+  defp loop(input, adapter, out, in_flight) do
+    case Conformance.Protocol.read(input) do
       :eof ->
         wait_for(0, in_flight)
 
-      request ->
+      message ->
+        request = ClientCompatRequest.decode(message)
         in_flight =
           if in_flight >= @max_in_flight,
             do: wait_for(@max_in_flight - 1, in_flight),
@@ -38,7 +37,7 @@ defmodule Conformance.Client.Main do
           send(parent, :done)
         end)
 
-        loop(adapter, out, in_flight + 1)
+        loop(input, adapter, out, in_flight + 1)
     end
   end
 
@@ -82,33 +81,6 @@ defmodule Conformance.Client.Main do
         test_name: name,
         result: {:error, %ClientErrorResult{message: "#{kind}: #{inspect(reason)}"}}
       }
-  end
-
-  defp read_request do
-    # A run of the gate once found the device decoding UTF-8 at its first read, which fails a
-    # read of bytes with `no_translation`. Setting the encoding right before each read leaves
-    # no window for that.
-    :ok = :io.setopts(:standard_io, [:binary, encoding: :latin1])
-
-    case IO.binread(:stdio, 4) do
-      :eof ->
-        :eof
-
-      <<size::32-big>> ->
-        ClientCompatRequest.decode(read_exactly(size))
-
-      other ->
-        raise "short read from stdin: #{inspect(other)}"
-    end
-  end
-
-  defp read_exactly(0), do: <<>>
-
-  defp read_exactly(n) do
-    case IO.binread(:stdio, n) do
-      data when is_binary(data) and byte_size(data) == n -> data
-      other -> raise "short read from stdin: #{inspect(other)}"
-    end
   end
 
   # One writer at a time, so concurrent results never interleave.

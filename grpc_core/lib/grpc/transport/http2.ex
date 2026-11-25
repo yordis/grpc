@@ -85,16 +85,25 @@ defmodule GRPC.Transport.HTTP2 do
   def extract_metadata(headers) do
     headers
     |> Enum.filter(fn {k, _} -> is_metadata(k) end)
-    |> Enum.into(%{}, &decode_metadata/1)
+    |> combine(&decode_metadata/1)
   end
 
+  # A header that appears more than once keeps every value, joined with a comma
+  # as RFC 9110 allows for any field.
   def decode_headers(headers) do
-    Enum.into(headers, %{}, fn {k, v} ->
+    combine(headers, fn {k, v} ->
       if is_metadata(k) do
         decode_metadata({k, v})
       else
         decode_reserved({k, v})
       end
+    end)
+  end
+
+  defp combine(headers, decode) do
+    Enum.reduce(headers, %{}, fn header, acc ->
+      {key, value} = decode.(header)
+      Map.update(acc, key, value, fn old -> old <> "," <> value end)
     end)
   end
 
@@ -148,13 +157,23 @@ defmodule GRPC.Transport.HTTP2 do
   end
 
   defp encode_metadata_pair({key, val}) do
-    val = if String.ends_with?(key, "-bin"), do: Base.encode64(val, padding: true), else: val
+    val = if String.ends_with?(key, "-bin"), do: Base.encode64(val, padding: false), else: val
     {String.downcase(to_string(key)), val}
   end
 
   defp decode_metadata({key, val}) do
-    val = if String.ends_with?(key, "-bin"), do: Base.decode64!(val, padding: false), else: val
+    val = if String.ends_with?(key, "-bin"), do: decode_binary_value(val), else: val
     {key, val}
+  end
+
+  # A peer may send the base64 padded or not, and may send several values in one
+  # entry, separated by commas.
+  defp decode_binary_value(val) do
+    val
+    |> String.split(",")
+    |> Enum.map_join(",", fn part ->
+      part |> String.trim() |> String.trim_trailing("=") |> Base.decode64!(padding: false)
+    end)
   end
 
   defp decode_reserved({"grpc-message" = key, val}) do

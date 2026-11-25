@@ -74,7 +74,7 @@ if Code.ensure_loaded?(:gun) do
     # Calls carrying headers or bodies go through `Adapter.call/3`, so an exit (busy or dead
     # connection process) does not leak them into logs and telemetry.
     def request(connection_process_pid, path, headers, body, deadline \\ :infinity) do
-      request(connection_process_pid, "POST", path, headers, body, deadline)
+      Adapter.call(connection_process_pid, {:request, path, headers, body, deadline})
     end
 
     # A request without a body, such as a Connect GET, has `nil` as the body.
@@ -163,6 +163,10 @@ if Code.ensure_loaded?(:gun) do
       :ok = :gun.shutdown(gun_pid)
       reply_waiters(state, {:error, :disconnected})
       {:stop, :normal, :ok, %{state | waiters: []}}
+    end
+
+    def handle_call({:request, path, headers, body, deadline}, from, state) do
+      handle_call({:request, "POST", path, headers, body, deadline}, from, state)
     end
 
     def handle_call(

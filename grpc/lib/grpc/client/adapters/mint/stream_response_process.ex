@@ -160,12 +160,22 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
     if state.failed do
       {:reply, :cancel, state, {:continue, :produce_response}}
     else
-      {connect, items, :ok} = GRPC.Client.Connect.Response.consume(connect, event)
+      {connect, items, action} = GRPC.Client.Connect.Response.consume(connect, event)
       state = %{state | connect: connect}
       state = Enum.reduce(items, state, &queue_connect_item/2)
-      state = if event == :done, do: %{state | terminated: true, done: true}, else: state
 
-      {:reply, :ok, state, {:continue, :produce_response}}
+      case {action, event} do
+        # The response cannot be read any further: the request is reset.
+        {:cancel, _} ->
+          state = %{state | failed: true, terminated: true, done: true}
+          {:reply, :cancel, state, {:continue, :produce_response}}
+
+        {:ok, :done} ->
+          {:reply, :ok, %{state | terminated: true, done: true}, {:continue, :produce_response}}
+
+        {:ok, _} ->
+          {:reply, :ok, state, {:continue, :produce_response}}
+      end
     end
   end
 

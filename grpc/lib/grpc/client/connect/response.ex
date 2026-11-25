@@ -14,6 +14,8 @@ defmodule GRPC.Client.Connect.Response do
   # `{:trailers, map}`, `{:error, error}`), and `:cancel` when the request should be reset
   # because the response cannot be read any further.
 
+  import Bitwise
+
   alias GRPC.Client.Connect
   alias GRPC.Transport.HTTP2
 
@@ -24,6 +26,7 @@ defmodule GRPC.Client.Connect.Response do
     :status,
     :headers,
     compressors: [],
+    ended: false,
     body: <<>>
   ]
 
@@ -41,12 +44,34 @@ defmodule GRPC.Client.Connect.Response do
 
   def consume(%{headers: nil} = response, {:headers, headers}) do
     response = %{response | headers: headers}
-    {response, [{:headers, response_headers(headers)}], :ok}
+    {response, [{:headers, response_headers(response, headers)}], :ok}
   end
 
   def consume(response, {:headers, _trailers}), do: {response, [], :ok}
 
+  def consume(%{ended: true} = response, {:data, _data}), do: {response, [], :ok}
+
+  def consume(%{kind: :stream, status: 200} = response, {:data, data}),
+    do: drain(%{response | body: response.body <> data}, [])
+
   def consume(response, {:data, data}), do: {%{response | body: response.body <> data}, [], :ok}
+
+  def consume(%{status: status} = response, :done) when status != 200 do
+    items = [{:trailers, trailers(response.headers)}, {:error, unary_error(response)}]
+    {response, items, :ok}
+  end
+
+  def consume(%{kind: :stream, ended: true} = response, :done), do: {response, [], :ok}
+
+  def consume(%{kind: :stream} = response, :done) do
+    message =
+      if response.body == <<>>,
+        do: "The response ended without the end of stream message",
+        else: "The response ended in the middle of a message"
+
+    error = GRPC.RPCError.exception(GRPC.Status.internal(), message)
+    {response, [{:error, error}], :ok}
+  end
 
   def consume(%{kind: :unary, status: 200} = response, :done) do
     trailers = {:trailers, trailers(response.headers)}
@@ -60,29 +85,123 @@ defmodule GRPC.Client.Connect.Response do
     end
   end
 
-  def consume(%{kind: :unary} = response, :done) do
-    items = [{:trailers, trailers(response.headers)}, {:error, unary_error(response)}]
-    {response, items, :ok}
+  # The envelopes of a stream: a flag, the length of the payload, the payload.
+  # Bit 0 of the flag says the payload is compressed, bit 1 that it is the end of the
+  # stream.
+  defp drain(response, items) do
+    with :ok <- GRPC.Client.MessageLimit.check_prefix(response.body),
+         <<flag::8, length::big-32, rest::binary>> when byte_size(rest) >= length <-
+           response.body do
+      <<payload::binary-size(^length), rest::binary>> = rest
+      response = %{response | body: rest}
+
+      case envelope(response, flag, payload) do
+        {:message, reply} -> drain(response, [{:ok, reply} | items])
+        {:end_stream, end_items} -> {%{response | ended: true}, Enum.reverse(items, end_items), :ok}
+        {:error, error} -> {%{response | ended: true}, Enum.reverse(items, [{:error, error}]), :cancel}
+      end
+    else
+      {:error, error} ->
+        {%{response | ended: true}, Enum.reverse(items, [{:error, error}]), :cancel}
+
+      _incomplete ->
+        {response, Enum.reverse(items), :ok}
+    end
   end
+
+  defp envelope(_response, flag, _payload) when (flag &&& 0xFC) != 0 do
+    {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "Invalid envelope flags #{flag}")}
+  end
+
+  defp envelope(response, flag, payload) do
+    with {:ok, payload} <- decompress_envelope(response, flag, payload) do
+      if (flag &&& 2) == 2 do
+        end_stream(payload)
+      else
+        case GRPC.Client.ReplyDecoder.decode(response.codec, payload, response.response_mod) do
+          {:ok, reply} -> {:message, reply}
+          {:error, error} -> {:error, error}
+        end
+      end
+    end
+  end
+
+  defp decompress_envelope(response, flag, payload) when (flag &&& 1) == 1 do
+    case header_value(response.headers, "connect-content-encoding") do
+      encoding when encoding in [nil, "", "identity"] ->
+        {:error,
+         GRPC.RPCError.exception(
+           GRPC.Status.internal(),
+           "Compressed flag is set, but the response has no connect-content-encoding"
+         )}
+
+      _encoding ->
+        decompress(response, "connect-content-encoding", payload)
+    end
+  end
+
+  defp decompress_envelope(_response, _flag, payload), do: {:ok, payload}
+
+  # The last envelope: the error of the call, if any, and the trailing metadata.
+  defp end_stream(payload) do
+    case Jason.decode(payload) do
+      {:ok, %{} = json} ->
+        trailers = end_metadata(json["metadata"])
+        items = [{:trailers, trailers}]
+
+        case json["error"] do
+          nil ->
+            {:end_stream, items}
+
+          %{} = error_json ->
+            case error(error_json) do
+              {:ok, error} ->
+                {:end_stream, items ++ [{:error, %{error | trailers: trailers}}]}
+
+              :error ->
+                {:error, bad_end_stream()}
+            end
+
+          _ ->
+            {:error, bad_end_stream()}
+        end
+
+      _ ->
+        {:error, bad_end_stream()}
+    end
+  end
+
+  defp bad_end_stream,
+    do: GRPC.RPCError.exception(GRPC.Status.internal(), "Invalid end of stream message")
+
+  defp end_metadata(%{} = metadata) do
+    metadata
+    |> Enum.flat_map(fn {key, values} -> for value <- List.wrap(values), do: {key, to_string(value)} end)
+    |> HTTP2.decode_headers()
+  end
+
+  defp end_metadata(_metadata), do: %{}
 
   # The error of a failed unary call is a JSON body. Without one, the HTTP status says what
   # went wrong.
   defp unary_error(%{status: status, body: body}) do
-    with {:ok, %{"code" => code} = json} <- Jason.decode(body),
-         {:ok, grpc_status} <- code_status(code) do
-      %GRPC.RPCError{
-        status: grpc_status,
-        message: json["message"],
-        details: details(json["details"])
-      }
+    with {:ok, %{} = json} <- Jason.decode(body),
+         {:ok, error} <- error(json) do
+      error
     else
-      _ ->
-        GRPC.RPCError.exception(
-          HTTP2.status_from_http(status),
-          "HTTP status #{status}"
-        )
+      _ -> GRPC.RPCError.exception(HTTP2.status_from_http(status), "HTTP status #{status}")
     end
   end
+
+  # The JSON of an error, in the body of a unary response and in the end of a stream.
+  defp error(%{"code" => code} = json) do
+    with {:ok, status} <- code_status(code) do
+      {:ok,
+       %GRPC.RPCError{status: status, message: json["message"], details: details(json["details"])}}
+    end
+  end
+
+  defp error(_json), do: :error
 
   @codes ~w(
     ok canceled unknown invalid_argument deadline_exceeded not_found already_exists
@@ -141,11 +260,13 @@ defmodule GRPC.Client.Connect.Response do
     Enum.find_value(headers, fn {key, value} -> if key == name, do: value end)
   end
 
-  defp response_headers(headers) do
+  defp response_headers(%{kind: :unary}, headers) do
     headers
     |> Enum.reject(fn {name, _} -> String.starts_with?(name, "trailer-") end)
     |> HTTP2.decode_headers()
   end
+
+  defp response_headers(_response, headers), do: HTTP2.decode_headers(headers)
 
   defp trailers(headers) do
     headers

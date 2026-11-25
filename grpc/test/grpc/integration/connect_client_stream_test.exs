@@ -57,7 +57,7 @@ defmodule GRPC.Integration.ConnectClientStreamTest do
           low = %Routeguide.Point{latitude: 1}
           high = %Routeguide.Point{latitude: 2}
 
-          assert {:ok, stream} =
+          assert {:ok, stream, %{headers: %{"x-custom-header" => "from-server"}}} =
                    Routeguide.RouteGuide.Stub.list_features(
                      channel,
                      %Routeguide.Rectangle{lo: low, hi: high},
@@ -65,7 +65,6 @@ defmodule GRPC.Integration.ConnectClientStreamTest do
                    )
 
           assert [
-                   {:headers, %{"x-custom-header" => "from-server"}},
                    {:ok, %Routeguide.Feature{name: "1"}},
                    {:ok, %Routeguide.Feature{name: "2"}},
                    {:trailers, %{"x-custom-trailer" => "from-server-trailer"}}

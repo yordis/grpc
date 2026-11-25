@@ -657,10 +657,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         {:ok, req, %{s | pending_reader: nil}}
 
       {:too_large, total} ->
-        body_too_large(req, s, total)
+        body_too_large(req, %{s | pending_reader: nil}, total)
 
       {:message_too_large, error} ->
-        message_too_large(req, s, error)
+        message_too_large(req, %{s | pending_reader: nil}, error)
     end
   end
 
@@ -684,10 +684,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         {:ok, req, s}
 
       {:too_large, total} ->
-        body_too_large(req, s, total)
+        body_too_large(req, %{s | pending_reader: nil}, total)
 
       {:message_too_large, error} ->
-        message_too_large(req, s, error)
+        message_too_large(req, %{s | pending_reader: nil}, error)
     end
   end
 
@@ -916,13 +916,67 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     {:stop, req, state}
   end
 
-  def terminate(reason, _req, state = %{pid: _pid}) do
+  def terminate(reason, req, state = %{pid: _pid}) do
     abort_rpc(state, reason)
+    drain_request_body(req, state)
     :ok
   end
 
-  def terminate(_reason, _req, _state) do
+  def terminate(_reason, req, state) do
+    drain_request_body(req, state)
     :ok
+  end
+
+  # Cowboy drops an HTTP/1.1 connection when a request ends with its body unfinished and
+  # of unknown length (chunked, as a streaming client sends it). The client may be about
+  # to reuse the connection, and fails with "server closed idle connection", so what is
+  # left of the body is read, within a bound of bytes and of time.
+  @drain_max_bytes 1_000_000
+  @drain_max_time 1_000
+
+  defp drain_request_body(
+         %{version: :"HTTP/1.1", has_body: true, body_length: :undefined} = req,
+         state
+       ) do
+    deadline = System.monotonic_time(:millisecond) + @drain_max_time
+
+    case is_map(state) && Map.get(state, :pending_reader) do
+      # Cowboy serves one read at a time, so the one in flight is awaited first.
+      {read_ref, _pid, _ref} ->
+        receive do
+          {:request_body, ^read_ref, :fin, _length, _body} ->
+            :ok
+
+          {:request_body, ^read_ref, :nofin, body} ->
+            do_drain_request_body(req, byte_size(body), deadline)
+        after
+          @drain_max_time -> :ok
+        end
+
+      _none ->
+        do_drain_request_body(req, 0, deadline)
+    end
+  end
+
+  defp drain_request_body(_req, _state), do: :ok
+
+  defp do_drain_request_body(req, drained, deadline) do
+    left = deadline - System.monotonic_time(:millisecond)
+
+    if drained > @drain_max_bytes or left <= 0 do
+      :ok
+    else
+      case :cowboy_req.read_body(req, %{length: 64_000, period: left}) do
+        {:ok, _data, _req} ->
+          :ok
+
+        {:more, data, req} ->
+          do_drain_request_body(req, drained + byte_size(data), deadline)
+      end
+    end
+  catch
+    # The stream is gone already, or the client sends no more.
+    _, _ -> :ok
   end
 
   def call_rpc(server, path, stream) do

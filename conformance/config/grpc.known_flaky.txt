@@ -1,9 +1,2 @@
 # Cases of the gRPC and gRPC-Web conformance run (config/grpc.yaml) allowed to fail by chance.
-
-# Over HTTP/1 the server answers a message that is over its limit and closes the connection
-# while the client is still sending, so the client may see "unexpected EOF".
-Server Message Size/HTTPVersion:1/**
-
-# Over HTTP/1 a client may reuse a connection that the server has just closed, and see
-# "server closed idle connection".
-Errors/HTTPVersion:1/**
+# Empty: none is known.

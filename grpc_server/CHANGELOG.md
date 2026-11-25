@@ -14,6 +14,8 @@
 
 ### Bug Fixes
 
+  * A Connect request whose content type does not fit the method is refused with HTTP 415, and `Accept-Post` names the content types the method takes. A unary content type (`application/proto`, `application/json`) on a streaming method used to give a server stream only its last message, and a client stream read the unary body as envelopes. The streaming content types (`application/connect+*`) on a unary method are refused too. Upgrade note: a Connect client must use the unary content types for unary methods and the streaming ones for the rest, as the Connect spec says.
+
   * A call's deadline timer is cancelled when its reply is complete, and a deadline that still arrives after the reply is ignored. Before, a Connect unary call whose deadline fired between the reply and the end of the RPC process made the request process crash with `response_already_sent`, and a Ranch error report. No upgrade action is needed.
 
   * An HTTP/1.1 connection that sends no request is closed again, after 60 seconds. The adapter had set Cowboy's `request_timeout` to `:idle_timeout`, which defaults to `:infinity`, so idle sockets lived forever and could fill `:max_connections`. The `:request_timeout` adapter option (default `60000`) is independent of `:idle_timeout`. The default is above Cowboy's 5 seconds on purpose, so a client that reuses a kept-alive connection does not hit a close. Upgrade note: set `adapter_opts: [request_timeout: ...]` to change it, or `:infinity` to restore the previous behavior.

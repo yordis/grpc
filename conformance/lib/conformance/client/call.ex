@@ -24,6 +24,8 @@ defmodule Conformance.Client.Call do
     UnimplementedRequest
   }
 
+  alias Conformance.Client.Channels
+
   @service "connectrpc.conformance.v1.ConformanceService"
   @unknown 2
 
@@ -102,13 +104,22 @@ defmodule Conformance.Client.Call do
 
   # Connection
 
+  # Cases share channels (see `Conformance.Client.Channels`), except the ones that need a
+  # connection of their own, which close it after the call.
   defp with_channel(req, adapter, fun) do
-    case GRPC.Stub.connect("#{req.host}:#{req.port}", connect_opts(req, adapter)) do
+    addr = "#{req.host}:#{req.port}"
+    opts = connect_opts(req, adapter)
+    shared? = Channels.shared?(req)
+
+    connected =
+      if shared?, do: Channels.checkout(addr, opts), else: GRPC.Stub.connect(addr, opts)
+
+    case connected do
       {:ok, channel} ->
         try do
           fun.(channel)
         after
-          GRPC.Stub.disconnect(channel)
+          unless shared?, do: GRPC.Stub.disconnect(channel)
         end
 
       {:error, error} ->

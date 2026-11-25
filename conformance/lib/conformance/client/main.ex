@@ -13,6 +13,7 @@ defmodule Conformance.Client.Main do
 
   def run(adapter) do
     {:ok, out} = Agent.start_link(fn -> nil end)
+    {:ok, _} = Conformance.Client.Channels.start_link(name: Conformance.Client.Channels)
 
     loop(Conformance.Protocol.open_input(), adapter, out, 0)
     System.halt(0)

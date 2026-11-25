@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * `GRPC.RPCError` has new `:headers` and `:trailers` fields, which a client sets from the reply when the server sent them with the error. New `GRPC.Transport.HTTP2.status_from_http/1` maps an HTTP status without `grpc-status` to a gRPC status, and `GRPC.Transport.HTTP2.grpc_content_type?/1` checks a response content type.
+
+### Behavior Changes
+
+  * `GRPC.Transport.HTTP2.extract_metadata/1` and `decode_headers/1` keep every value of a header that appears more than once, joined with a comma, where the last value won before.
+
+### Bug Fixes
+
+  * `GRPC.Codec.JSON.decode/2` decodes into the message struct.
+  * `grpc-status-details-bin` is encoded as unpadded base64.
+
 ## v1.1.0 - 2026-11-13
 
 ### Behavior Changes

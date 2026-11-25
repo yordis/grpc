@@ -2,11 +2,21 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * The client speaks the Connect protocol (https://connectrpc.com/docs/protocol) with the Mint adapter. Pass `protocol: :connect` to `GRPC.Stub.connect/2`. Unary, client, server and bidirectional streaming calls work, over HTTP/1.1 and HTTP/2, h2c and TLS, with proto and JSON, identity and gzip. Connect errors keep their headers and trailers, and an error without a code takes the code of the HTTP status. A unary call goes as GET with the new `http_method: :get` call option, for a method without side effects. The Gun adapter does not speak Connect yet. It is covered by the Connect conformance suite (see `conformance/README.md`).
+
 ### Behavior Changes
 
   * The optional `:gun` dependency is now `~> 2.8.0` (was `~> 2.7.0`), with cowlib 2.22.0. Gun 2.7 and earlier crash on a DATA frame that cowlib 2.22 reports for a stream that was already reset, and gun 2.8 handles it, so an app on cowlib 2.22 or later needs gun 2.8. Gun 2.8 requires cowlib 2.22.0 or newer. The lock files now use cowboy 2.21.0, the first cowboy that handles the same cowlib 2.22 return value.
 
 ### Bug Fixes
+
+  * Errors carry the headers and trailers of the reply as `%GRPC.RPCError{}` fields. A reply that ends without `grpc-status` is an error, an HTTP status without `grpc-status` maps to a gRPC status, and the trailers decide the status on Mint when the headers carry one. A reply that is not `application/grpc`, that the codec cannot decode, or that carries unexpected extra messages fails the call, and a compressed message is rejected when no compression was negotiated.
+
+  * A Mint stream that is cancelled ends with `CANCELED`, one reset in the middle of a stream ends with an `RPCError`, and a streaming call is bound by its timeout. A server CANCEL reset after the deadline is `DEADLINE_EXCEEDED`. The response metadata of a client stream is kept.
+
+  * The Gun adapter decompresses compressed streamed replies. Both adapters keep every value of a repeated header and send binary metadata values unpadded.
 
   * The Mint adapter no longer leaks a `StreamResponseProcess` when the call to the connection process exits, because the process is gone, dies during the call, or takes longer than the call timeout.
 

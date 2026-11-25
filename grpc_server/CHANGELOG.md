@@ -4,15 +4,29 @@
 
 ### Enhancements
 
+  * The server speaks the Connect protocol (https://connectrpc.com/docs/protocol). A call that arrives with a Connect content type reaches the same handler as a gRPC call, and `stream.access_mode` is `:connectrpc`. Unary, client, server and bidirectional streaming calls work, over HTTP/1.1 and HTTP/2, with proto and JSON, identity and gzip. A unary method marked `idempotency_level = NO_SIDE_EFFECTS` is also served as GET. Connect errors, `connect-timeout-ms` and `connect-protocol-version` are handled, and a request with an unsupported verb or content type gets a Connect error. The `GRPC.Server.Test` helpers accept the new access mode. The Connect protocol is covered by the Connect conformance suite, which also covers gRPC and gRPC-Web (see `conformance/README.md`).
+
+  * The server keeps an HTTP/1.1 connection alive when the router answers a call itself, for example for an unknown method, and when a reply precedes the end of a chunked request body. An idle HTTP/1.1 connection lasts as long as an idle HTTP/2 one.
+
   * New `GRPC.Server.Stream.timeout_ms/1` returns the timeout the client sent, in milliseconds, or `nil`. It reads `grpc-timeout` for gRPC and gRPC-Web and `connect-timeout-ms` for Connect, so a handler or interceptor needs no header parsing. `GRPC.Server.Stream` has a new `:timeout_ms` field.
 
 ### Behavior Changes
 
-  * `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. If you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
+  * Breaking: the limit of what the server sends is independent of the receive limit. `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. 
+    Upgrade: if you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
 
 ### Bug Fixes
 
-  * The 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. A server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size` (a behavior change).
+  * Breaking: the 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. 
+    Upgrade: a server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size`, to a larger number of bytes or to `:infinity`.
+
+  * A gRPC-Web response echoes the request's `grpc-web` content type, and each line of its trailer frame ends with CRLF.
+
+  * A gRPC call with a JSON codec is answered as `application/grpc+json`. A gRPC call that fails before it starts is answered with a gRPC content type, and an unsupported content type from a gRPC client with a bare 415. Content types of Connect no longer log an invalid content-type warning.
+
+  * A handler that raises a `GRPC.RPCError` now sends its custom trailers with the error, and custom headers in a HEADERS frame ahead of the error trailers.
+
+  * A connection no longer starves its window when streams end with data the server did not ask for.
 
   * A server stream no longer hangs when two calls on one connection fill Cowboy's send buffers. If a stream waited for its stream buffer to drain and the connection buffer then filled, the second alarm made the stream forget it was waiting. When the buffers drained it got no ack, and the call never ended, however fast the client read (#652).
 

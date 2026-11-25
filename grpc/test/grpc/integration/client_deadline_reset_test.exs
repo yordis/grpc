@@ -24,6 +24,21 @@ defmodule GRPC.Integration.ClientDeadlineResetTest do
                    timeout: 500
                  )
       end
+
+      test "a server reset in the middle of a stream is an RPCError", %{adapter: adapter} do
+        port =
+          ScriptedH2Server.start([
+            {:headers, [{":status", "200"}, {"content-type", "application/grpc"}]},
+            {:rst, @cancel}
+          ])
+
+        channel = ScriptedH2Server.connect(port, adapter)
+
+        {:ok, replies} =
+          Routeguide.RouteGuide.Stub.list_features(channel, %Routeguide.Rectangle{})
+
+        assert [{:error, %GRPC.RPCError{}}] = Enum.to_list(replies)
+      end
     end
   end
 end

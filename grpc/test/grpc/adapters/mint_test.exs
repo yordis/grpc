@@ -589,7 +589,7 @@ defmodule GRPC.Client.Adapters.MintTest do
 
   describe "connect/2 with hostname" do
     setup do
-      server_credential = build(:credential)
+      server_credential = GRPC.TestCerts.server_credential()
 
       {:ok, _, port} =
         GRPC.Server.start_endpoint(TLSEndpoint, 0, adapter_opts: [cred: server_credential])

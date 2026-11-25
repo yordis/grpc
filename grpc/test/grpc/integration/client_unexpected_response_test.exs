@@ -159,6 +159,47 @@ defmodule GRPC.Integration.ClientUnexpectedResponseTest do
                    timeout: :infinity
                  )
       end
+
+      test "a grpc-status in the headers is ignored when a message follows and no trailers do",
+           %{adapter: adapter} do
+        port =
+          ScriptedH2Server.start([
+            {:headers, @ok_headers ++ [{"grpc-status", "9"}]},
+            {:data, frame(%Helloworld.HelloReply{message: "hi"}), :fin}
+          ])
+
+        assert {:error, %GRPC.RPCError{status: status, headers: headers}} =
+                 adapter |> then(&connect(port, &1)) |> unary()
+
+        assert status in [@internal, @unknown]
+        assert is_map(headers)
+      end
+
+      test "a grpc-status in the headers is ignored when the trailers have another",
+           %{adapter: adapter} do
+        port =
+          ScriptedH2Server.start([
+            {:headers, @ok_headers ++ [{"grpc-status", "8"}]},
+            {:headers, [{"foo", "bar"}, {"grpc-status", "9"}], :fin}
+          ])
+
+        assert {:error, %GRPC.RPCError{status: 9}} =
+                 adapter |> then(&connect(port, &1)) |> unary()
+      end
+
+      test "a compressed message under the identity encoding is an error", %{adapter: adapter} do
+        body = Protobuf.encode(%Helloworld.HelloReply{message: "hi"})
+
+        port =
+          ScriptedH2Server.start([
+            {:headers, @ok_headers ++ [{"grpc-encoding", "identity"}]},
+            {:data, <<1, byte_size(body)::32, body::binary>>},
+            {:headers, @ok_trailers, :fin}
+          ])
+
+        assert {:error, %GRPC.RPCError{status: @internal}} =
+                 adapter |> then(&connect(port, &1)) |> unary()
+      end
     end
   end
 end

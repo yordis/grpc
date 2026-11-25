@@ -123,5 +123,24 @@ defmodule GRPC.Client.Connect.ResponseTest do
 
       assert {:error, %GRPC.RPCError{status: 11}} = List.last(items)
     end
+
+    test "carries the headers of the response and the metadata of the end" do
+      end_stream = envelope(2, ~s({"error":{"code":"aborted"},"metadata":{"x-trailer":["t"]}}))
+
+      {_response, items} =
+        feed(response(:client_stream), [
+          {:status, 200},
+          {:headers, [{"content-type", "application/connect+proto"}, {"x-header", "h"}]},
+          {:data, end_stream},
+          :done
+        ])
+
+      assert {:error,
+              %GRPC.RPCError{
+                status: 10,
+                headers: %{"x-header" => "h"},
+                trailers: %{"x-trailer" => "t"}
+              }} = List.last(items)
+    end
   end
 end

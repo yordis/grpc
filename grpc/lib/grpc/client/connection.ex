@@ -263,7 +263,7 @@ defmodule GRPC.Client.Connection do
     * `:codec` – request/response codec (default: `GRPC.Codec.Proto`)
     * `:protocol` – the wire protocol of the calls, `:grpc` (default) or `:connect`.
       `:connect` speaks the [Connect protocol](https://connectrpc.com/docs/protocol)
-      and needs the Mint adapter.
+      and needs the Mint or the Gun adapter.
     * `:compressor` / `:accepted_compressors` – message compression
     * `:headers` – default metadata headers
     * `:connect_timeout` – how long `connect/2` waits for the first
@@ -1347,11 +1347,15 @@ defmodule GRPC.Client.Connection do
   defp resolve_credential(other, _scheme), do: other
 
   defp validate_protocol!(:grpc, _adapter), do: :ok
-  defp validate_protocol!(:connect, GRPC.Client.Adapters.Mint), do: :ok
+
+  defp validate_protocol!(:connect, adapter)
+       when adapter in [GRPC.Client.Adapters.Mint, GRPC.Client.Adapters.Gun],
+       do: :ok
 
   defp validate_protocol!(:connect, adapter) do
     raise ArgumentError,
-          "the :connect protocol needs the GRPC.Client.Adapters.Mint adapter, got: #{inspect(adapter)}"
+          "the :connect protocol needs the GRPC.Client.Adapters.Mint or " <>
+            "GRPC.Client.Adapters.Gun adapter, got: #{inspect(adapter)}"
   end
 
   defp validate_protocol!(protocol, _adapter) do

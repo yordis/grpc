@@ -59,6 +59,7 @@ if Code.ensure_loaded?(:gun) do
     @behaviour GRPC.Client.Adapter
 
     alias GRPC.Client.Adapter
+    alias GRPC.Client.Connect
     alias GRPC.Client.Adapters.Gun.ConnectionProcess
 
     @default_tcp_opts [nodelay: true]
@@ -149,7 +150,7 @@ if Code.ensure_loaded?(:gun) do
         |> Map.delete(:transport_opts)
         |> Map.merge(%{
           transport: :ssl,
-          protocols: [:http2],
+          protocols: protocols(channel, opts, :tls),
           tcp_opts: @default_tcp_opts,
           tls_opts: tls_opts
         })
@@ -173,10 +174,30 @@ if Code.ensure_loaded?(:gun) do
       open_opts =
         opts
         |> Map.delete(:transport_opts)
-        |> Map.merge(%{transport: :tcp, protocols: [:http2], tcp_opts: tcp_opts})
+        |> Map.merge(%{
+          transport: :tcp,
+          protocols: protocols(channel, opts, :tcp),
+          tcp_opts: tcp_opts
+        })
 
       do_connect(channel, open_opts)
     end
+
+    # The gRPC protocol runs on HTTP/2 only. Connect runs on either version, `:http1` and
+    # `:http2` as the Mint adapter names them, and Gun opens a plain TCP connection with one.
+    defp protocols(%{protocol: :connect}, opts, transport) do
+      protocols =
+        opts
+        |> Map.get(:protocols, [:http1, :http2])
+        |> Enum.map(fn
+          :http1 -> :http
+          protocol -> protocol
+        end)
+
+      if transport == :tcp, do: Enum.take(protocols, 1), else: protocols
+    end
+
+    defp protocols(_channel, _opts, _transport), do: [:http2]
 
     defp do_connect(channel, open_opts) do
       # `:retry` and `:retry_fun` given in `:adapter_opts` take precedence.
@@ -244,11 +265,10 @@ if Code.ensure_loaded?(:gun) do
            opts,
            deadline
          ) do
-      headers = GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
-      {:ok, data, _} = GRPC.Message.to_data(message, opts)
+      {method, path, headers, data} = request_parts(stream, path, message, opts)
 
       case call_connection(conn_pid, fn ->
-             ConnectionProcess.request(conn_pid, path, headers, data, deadline)
+             ConnectionProcess.request(conn_pid, method, path, headers, data, deadline)
            end) do
         {:ok, %{stream_ref: stream_ref, response_pid: response_pid}} ->
           {:ok, stream_ref, response_pid}
@@ -258,13 +278,43 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
+    # A Connect unary call sends its message as the whole body, or in the query of a GET.
+    defp request_parts(%{channel: %{protocol: :connect}} = stream, path, message, opts) do
+      kind = Connect.kind(stream)
+
+      cond do
+        opts[:http_method] == :get and kind == :unary ->
+          {"GET", Connect.get_path(stream, message, opts), request_headers(stream, opts, "GET"),
+           nil}
+
+        kind == :unary ->
+          {"POST", path, request_headers(stream, opts, "POST"),
+           Connect.unary_body(message, opts[:compressor])}
+
+        true ->
+          {:ok, data, _} = GRPC.Message.to_data(message, opts)
+          {"POST", path, request_headers(stream, opts, "POST"), data}
+      end
+    end
+
+    defp request_parts(stream, path, message, opts) do
+      {:ok, data, _} = GRPC.Message.to_data(message, opts)
+      {"POST", path, request_headers(stream, opts, "POST"), data}
+    end
+
+    defp request_headers(%{channel: %{protocol: :connect}} = stream, opts, method),
+      do: Connect.request_headers(stream, opts, method)
+
+    defp request_headers(stream, opts, _method),
+      do: GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
+
     @impl true
     def send_headers(
           %{channel: %{adapter_payload: %{conn_pid: conn_pid}}, path: path} = stream,
           opts
         ) do
       deadline = deadline(opts[:timeout])
-      headers = GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)
+      headers = request_headers(stream, opts, "POST")
 
       case call_connection(conn_pid, fn ->
              ConnectionProcess.open_stream(conn_pid, path, headers, deadline)
@@ -326,6 +376,9 @@ if Code.ensure_loaded?(:gun) do
     @impl true
     def receive_data(%{payload: %{request_error: error}}, _opts), do: {:error, error}
 
+    def receive_data(%{channel: %{protocol: :connect}} = stream, opts),
+      do: receive_connect(stream, stream.grpc_type, opts)
+
     def receive_data(
           %{server_stream: true} = stream,
           opts
@@ -363,6 +416,161 @@ if Code.ensure_loaded?(:gun) do
           error
       end
     end
+
+    # The Connect protocol. `Connect.Response` reads the response, and this feeds it what
+    # Gun delivers for the stream: the status and the headers, the data, the end.
+    defp receive_connect(stream, type, opts)
+         when type in [:server_stream, :bidirectional_stream] do
+      state = connect_state(stream, opts)
+
+      case connect_headers(state) do
+        {:ok, headers, state} ->
+          replies = Stream.unfold(state, &connect_next/1)
+
+          if opts[:return_headers],
+            do: {:ok, replies, %{headers: headers}},
+            else: {:ok, replies}
+
+        {:error, _} = error ->
+          error
+      end
+    end
+
+    defp receive_connect(stream, _type, opts) do
+      {items, _state} = connect_collect(connect_state(stream, opts), [])
+
+      case {Keyword.get(items, :error), Keyword.get_values(items, :ok)} do
+        {nil, [reply]} ->
+          if opts[:return_headers] do
+            {:ok, reply,
+             %{headers: Keyword.get(items, :headers), trailers: Keyword.get(items, :trailers)}}
+          else
+            {:ok, reply}
+          end
+
+        {nil, []} ->
+          GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+          {:error,
+           GRPC.RPCError.exception(GRPC.Status.unimplemented(), "Missing response message.")}
+
+        {nil, _several} ->
+          GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+          {:error,
+           GRPC.RPCError.exception(
+             GRPC.Status.unimplemented(),
+             "Received more than one message for a call that returns one."
+           )}
+
+        {error, _replies} ->
+          {:error, error}
+      end
+    end
+
+    defp connect_state(stream, opts) do
+      %{
+        stream: stream,
+        response: GRPC.Client.Connect.Response.new(stream),
+        response_pid: stream.payload.response_pid,
+        deadline: receive_deadline(stream.payload, opts),
+        return_headers: opts[:return_headers] == true,
+        items: [],
+        done: false
+      }
+    end
+
+    # Reads up to the headers of the response. Whatever came with them stays in the state.
+    defp connect_headers(%{items: [{:headers, headers} | rest]} = state),
+      do: {:ok, headers, %{state | items: rest}}
+
+    defp connect_headers(%{items: [{:error, error} | _]}), do: {:error, error}
+    defp connect_headers(%{done: true}), do: {:error, connect_ended()}
+
+    defp connect_headers(state) do
+      case connect_pull(state) do
+        {:error, _} = error -> error
+        state -> connect_headers(state)
+      end
+    end
+
+    # The next item of a streaming call. An error is the last one.
+    defp connect_next(%{items: [{:error, error} | _]} = state) do
+      unless state.done, do: cancel(state.stream)
+      {{:error, error}, %{state | items: [], done: true}}
+    end
+
+    defp connect_next(%{items: [{:headers, _} | rest]} = state),
+      do: connect_next(%{state | items: rest})
+
+    defp connect_next(%{items: [{:trailers, _} | rest]} = state) when not state.return_headers,
+      do: connect_next(%{state | items: rest})
+
+    defp connect_next(%{items: [item | rest]} = state), do: {item, %{state | items: rest}}
+    defp connect_next(%{done: true}), do: nil
+
+    defp connect_next(state) do
+      case connect_pull(state) do
+        {:error, error} -> {{:error, error}, %{state | items: [], done: true}}
+        state -> connect_next(state)
+      end
+    end
+
+    # Reads the whole response: the items of the call by their kind.
+    defp connect_collect(%{done: true} = state, acc), do: {acc ++ state.items, state}
+
+    defp connect_collect(state, acc) do
+      case connect_pull(state) do
+        {:error, error} -> {acc ++ [error: error], state}
+        pulled -> connect_collect(%{pulled | items: []}, acc ++ pulled.items)
+      end
+    end
+
+    # Waits for the next thing Gun delivers and gives it to the response.
+    defp connect_pull(%{response_pid: response_pid, deadline: deadline} = state) do
+      case connect_events(response_pid, deadline) do
+        {:error, _} = error ->
+          error
+
+        events ->
+          Enum.reduce(events, state, fn event, state ->
+            {response, items, action} =
+              GRPC.Client.Connect.Response.consume(state.response, event)
+
+            if action == :cancel, do: cancel(state.stream)
+
+            %{
+              state
+              | response: response,
+                items: state.items ++ items,
+                done: state.done or event == :done or action == :cancel
+            }
+          end)
+      end
+    end
+
+    defp connect_events(response_pid, deadline) do
+      case GRPC.Client.Adapters.Gun.StreamResponseProcess.await(response_pid, deadline) do
+        {:response, fin, status, headers} ->
+          [{:status, status}, {:headers, headers}] ++ connect_end(fin)
+
+        {:data, fin, data} ->
+          [{:data, data}] ++ connect_end(fin)
+
+        {:trailers, trailers} ->
+          [{:headers, trailers}, :done]
+
+        error ->
+          {:error, error} = await_error(error, deadline)
+          {:error, error}
+      end
+    end
+
+    defp connect_end(:fin), do: [:done]
+    defp connect_end(:nofin), do: []
+
+    defp connect_ended,
+      do: GRPC.RPCError.exception(GRPC.Status.internal(), "The response ended without headers")
 
     defp handle_fin_response(headers, opts) do
       # Trailers-only response: headers contain trailers, check status

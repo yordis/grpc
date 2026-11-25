@@ -420,6 +420,7 @@ defmodule GRPC.Integration.ServerTest do
       run_server([TimeoutServer], fn port ->
         {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
         rect = %Routeguide.Rectangle{}
+
         assert {:error, %GRPC.RPCError{message: "Deadline expired", status: 4}} =
                  channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 50)
       end)

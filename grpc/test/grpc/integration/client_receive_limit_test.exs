@@ -56,6 +56,10 @@ defmodule GRPC.Integration.ClientReceiveLimitTest do
 
           assert {:error, %RPCError{status: @resource_exhausted}} = say_hello(channel, [])
 
+          # A call over its limit closes an HTTP/1.1 connection, and the close reaches the
+          # channel after the call returns, so the next call has its own channel.
+          channel = connect(port, connect_opts, max_receive_message_length: 100)
+
           assert {:ok, %Helloworld.HelloReply{}} =
                    say_hello(channel, max_receive_message_length: 10_000)
 
@@ -96,6 +100,10 @@ defmodule GRPC.Integration.ClientReceiveLimitTest do
 
           assert {:error, %RPCError{status: @resource_exhausted}} =
                    replies |> Enum.to_list() |> List.last()
+
+          # A call over its limit closes an HTTP/1.1 connection, and the close reaches the
+          # channel after the call returns, so the next call has its own channel.
+          channel = connect(port, connect_opts, [])
 
           {:ok, replies} =
             Routeguide.RouteGuide.Stub.list_features(channel, %Routeguide.Rectangle{},

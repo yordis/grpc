@@ -15,16 +15,28 @@
   * Breaking: the limit of what the server sends is independent of the receive limit. `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. 
     Upgrade: if you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
 
+  * A `POST` whose content type is neither gRPC nor Connect now gets HTTP 415. Before, the server handled it as gRPC with proto. When the request has no `Content-Type`, the server falls back to `Accept`, so a `POST` without a content type and with `Accept: */*`, the `curl` default, gets 415, and one with `Accept: application/json` is read as Connect with JSON. Upgrade: send a `Content-Type` of gRPC, gRPC-Web or Connect.
+
+  * An error keeps the trailers a handler set with `GRPC.Server.set_trailers/2`, and custom headers go in a HEADERS frame ahead of the error trailers. An error is no longer Trailers-Only once a handler or interceptor set any header. The CORS interceptor always sets headers, so a gRPC-Web server with CORS answers an error with a header block and then trailers. Upgrade: a client that expected a Trailers-Only error from such a server must read the status from the trailers.
+
+  * The trailer block of a gRPC-Web response ends every line with CRLF, as the protocol says. The bytes on the wire change.
+
+  * The server sets the HTTP/2 flow control window margins to 0, so the window it announces follows what a stream asked for.
+
+  * The server drains an HTTP/1.1 request body of up to 1 MB, for up to 1 second, when it ends a call or the router answers 400 or 404 before the handler reads it, so the connection can serve the next request.
+
 ### Bug Fixes
 
   * Breaking: the 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. 
     Upgrade: a server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size`, to a larger number of bytes or to `:infinity`.
 
-  * A gRPC-Web response echoes the request's `grpc-web` content type, and each line of its trailer frame ends with CRLF.
+  * A gRPC-Web response echoes the request's `grpc-web` content type.
 
-  * A gRPC call with a JSON codec is answered as `application/grpc+json`. A gRPC call that fails before it starts is answered with a gRPC content type, and an unsupported content type from a gRPC client with a bare 415. Content types of Connect no longer log an invalid content-type warning.
+  * A gRPC call with a JSON codec is answered as `application/grpc+json`.
 
-  * A handler that raises a `GRPC.RPCError` now sends its custom trailers with the error, and custom headers in a HEADERS frame ahead of the error trailers.
+  * A gRPC call that fails before it starts is answered with a gRPC content type.
+
+  * Content types of Connect no longer log an invalid content-type warning.
 
   * A connection no longer starves its window when streams end with data the server did not ask for.
 

@@ -10,10 +10,11 @@
 
   * `GRPC.Transport.HTTP2.extract_metadata/1` and `decode_headers/1` keep every value of a header that appears more than once, joined with a comma, where the last value won before.
 
-### Bug Fixes
+  * `GRPC.Codec.JSON.decode/2` returns the message struct when given a message module, where it returned a string-keyed map. A `application/grpc+json` handler that matched `%{"name" => _}` now gets `%HelloRequest{}`, and a client reads JSON replies as structs. Upgrade: match on the struct.
 
-  * `GRPC.Codec.JSON.decode/2` decodes into the message struct.
-  * `grpc-status-details-bin` is encoded as unpadded base64.
+  * `grpc-status-details-bin` and other `-bin` metadata are sent as unpadded base64, as gRPC says. A decoder that accepts both forms, such as `Base.decode64(x, padding: false)`, is unaffected.
+
+  * A `%GRPC.RPCError{}` that a client returns can have `:headers` and `:trailers` set. Code that compares whole structs, such as `assert err == %GRPC.RPCError{status: 5, message: "x"}`, fails when the server sent headers or trailers with the error.
 
 ## v1.1.0 - 2026-11-13
 

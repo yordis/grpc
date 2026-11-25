@@ -36,16 +36,18 @@ CLIENT_ADAPTER=mint conformance/run.sh config/client.yaml
 CLIENT_ADAPTER=gun  conformance/run.sh config/client.yaml
 ```
 
-Client mode, Connect protocol with the Mint adapter (1764 cases):
+Client mode, Connect protocol with the Mint and the Gun adapter (1764 cases each):
 
 ```sh
 CLIENT_ADAPTER=mint conformance/run.sh config/client.connect.yaml
+CLIENT_ADAPTER=gun  conformance/run.sh config/client.connect.yaml
 ```
 
-Client mode, gRPC-Web protocol with the Mint adapter (2046 cases):
+Client mode, gRPC-Web protocol with the Mint and the Gun adapter (2046 cases each):
 
 ```sh
 CLIENT_ADAPTER=mint conformance/run.sh config/client.grpcweb.yaml
+CLIENT_ADAPTER=gun  conformance/run.sh config/client.grpcweb.yaml
 ```
 
 Narrower server configs run a slice of `full.yaml`: `config/grpc.yaml` for gRPC and gRPC-Web
@@ -93,8 +95,8 @@ as a full segment, so partial wildcards such as `Protocol:*` do not match.
 | `config/grpc.yaml` | server | the gRPC and gRPC-Web part of `full.yaml` |
 | `config/connect.yaml` | server | the Connect part of `full.yaml` |
 | `config/client.yaml` | client | gRPC over HTTP/2 with the Mint or Gun adapter, proto and JSON, identity and gzip, every stream type, TLS and client certificates, message receive limit |
-| `config/client.connect.yaml` | client | the Connect protocol (`protocol: :connect`) with the Mint adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, GET, timeouts, cancellation, message receive limit |
-| `config/client.grpcweb.yaml` | client | the gRPC-Web protocol (`protocol: :grpc_web`) with the Mint adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, trailers, timeouts, cancellation, message receive limit |
+| `config/client.connect.yaml` | client | the Connect protocol (`protocol: :connect`) with the Mint or Gun adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, GET, timeouts, cancellation, message receive limit |
+| `config/client.grpcweb.yaml` | client | the gRPC-Web protocol (`protocol: :grpc_web`) with the Mint or Gun adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, trailers, timeouts, cancellation, message receive limit |
 
 Left off on purpose: HTTP/1.1 and gRPC-Web in `client.yaml` (the client speaks gRPC over HTTP/2 only), and half-duplex
 bidirectional streaming over HTTP/1.1 for the client.

@@ -17,7 +17,7 @@ defmodule GRPC.Client.AdapterTest do
 
       assert {:noproc,
               {GenServer, :call,
-               [^pid, {:request, @path, :redacted, :redacted, :infinity}, 5_000]}} =
+               [^pid, {:request, "POST", @path, :redacted, :redacted, :infinity}, 5_000]}} =
                catch_exit(GunConnectionProcess.request(pid, @path, @headers, @body))
     end
 

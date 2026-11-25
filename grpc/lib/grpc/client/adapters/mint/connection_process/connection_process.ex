@@ -54,7 +54,47 @@ if Code.ensure_loaded?(Mint.HTTP) do
       * :stream_response_pid (required) - the process to where send the responses coming from the connection will be sent to be processed
     """
     def request(pid, method, path, headers, body, opts \\ []) do
-      Adapter.call(pid, {:request, method, path, headers, body, opts})
+      request = {:request, method, path, headers, body, opts}
+
+      case Adapter.call(pid, request) do
+        {:busy, spec} -> request_on_lane(spec, request)
+        reply -> reply
+      end
+    end
+
+    # HTTP/1.1 carries one request at a time on a connection. A call that finds the
+    # connection busy gets a connection of its own, for that one call. The reply
+    # carries the pid that holds the request, and the body, cancel and deadline
+    # calls go to it.
+    defp request_on_lane({scheme, host, port, connect_opts}, request) do
+      lane_opts = connect_opts |> Keyword.delete(:parent) |> Keyword.put(:lane?, true)
+
+      case GenServer.start(__MODULE__, {scheme, host, port, lane_opts}) do
+        {:ok, lane} ->
+          try do
+            case Adapter.call(lane, request) do
+              {:ok, response} ->
+                {:ok, Map.put(response, :conn_pid, lane)}
+
+              error ->
+                stop_lane(lane)
+                error
+            end
+          catch
+            :exit, reason ->
+              stop_lane(lane)
+              :erlang.raise(:exit, reason, __STACKTRACE__)
+          end
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+
+    defp stop_lane(lane) do
+      GenServer.stop(lane, :normal, 1_000)
+    catch
+      :exit, _reason -> :ok
     end
 
     @doc """
@@ -95,7 +135,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
       {notify_drain, opts} = Keyword.pop(opts, :notify_drain, false)
       {metadata, opts} = Keyword.pop(opts, :grpc_transport_metadata, %{})
       metadata = Map.put(metadata, :transport_ref, self())
-      Telemetry.execute(:started, %{generation: 0, active_streams: 0}, metadata)
+      {lane?, opts} = Keyword.pop(opts, :lane?, false)
+      unless lane?, do: Telemetry.execute(:started, %{generation: 0, active_streams: 0}, metadata)
       {keepalive_opts, opts} = Keyword.split(opts, [:keepalive, :keepalive_tolerance])
 
       case connect(scheme, host, port, opts) do
@@ -108,10 +149,13 @@ if Code.ensure_loaded?(Mint.HTTP) do
             connect_opts: opts,
             retry: retry,
             notify_drain: notify_drain,
-            telemetry_metadata: metadata
+            telemetry_metadata: metadata,
+            lane?: lane?
           ]
 
-          Telemetry.execute(:connected, %{generation: 1}, Map.put(metadata, :reconnect, false))
+          unless lane? do
+            Telemetry.execute(:connected, %{generation: 1}, Map.put(metadata, :reconnect, false))
+          end
 
           {:ok,
            conn
@@ -124,7 +168,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
             "unable to establish a connection to #{scheme}://#{host}:#{port}. reason: #{inspect(reason)}"
           )
 
-          connect_failed(metadata, reason)
+          unless lane?, do: connect_failed(metadata, reason)
           {:stop, reason}
       end
     catch
@@ -134,7 +178,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
         )
 
         metadata = Map.put(opts[:grpc_transport_metadata] || %{}, :transport_ref, self())
-        connect_failed(metadata, reason)
+        unless opts[:lane?], do: connect_failed(metadata, reason)
         {:stop, reason}
     end
 
@@ -147,8 +191,31 @@ if Code.ensure_loaded?(Mint.HTTP) do
       {:stop, :normal, State.update_conn(state, conn)}
     end
 
+    # The connection was closed on purpose (HTTP/1.1 cannot abandon one request) or by the
+    # server while idle. The next call opens it again.
+    def handle_call({:request, _, _, _, _, _} = request, from, %{lazy_reconnect: true} = state) do
+      case reconnect_for_request(state) do
+        {:ok, state} -> handle_call(request, from, state)
+        {:error, reason} -> {:reply, {:error, reason}, state}
+      end
+    end
+
+    def handle_call(request, _from, %{lazy_reconnect: true} = state)
+        when elem(request, 0) in [:cancel_request, :stream_body] do
+      {:reply, :ok, state}
+    end
+
     def handle_call(_request, _from, %{conn: %{state: :closed}} = state) do
       {:reply, {:error, @connection_closed_error}, state}
+    end
+
+    def handle_call(
+          {:request, _method, _path, _headers, _body, _opts},
+          _from,
+          %{conn: %Mint.HTTP1{}, lane?: false} = state
+        )
+        when map_size(state.requests) > 0 do
+      {:reply, {:busy, {state.scheme, state.host, state.port, state.connect_opts}}, state}
     end
 
     def handle_call(
@@ -288,7 +355,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
         request_ref ->
           new_state = cancel_dead_stream(state, request_ref, pid, reason)
-          {:noreply, new_state}
+          {:noreply, new_state, {:continue, :check_connection_status}}
       end
     end
 
@@ -314,7 +381,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
             end
 
           state = observe_settings(state)
-          check_connection_status(state, nil)
+          state |> check_connection_status(nil) |> lane_done()
 
         {:error, conn, error, _responses} ->
           state = State.update_conn(state, conn)
@@ -324,7 +391,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     @impl true
     def handle_continue(:check_connection_status, state) do
-      check_connection_status(state, nil)
+      state |> check_connection_status(nil) |> lane_done()
     end
 
     def handle_continue(:process_request_stream_queue, state) do
@@ -347,6 +414,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
+    def terminate(_reason, %{lane?: true}), do: :normal
+
     def terminate(reason, state) do
       Telemetry.execute(
         :stopped,
@@ -355,6 +424,33 @@ if Code.ensure_loaded?(Mint.HTTP) do
       )
 
       :normal
+    end
+
+    # A lane ends with its one request.
+    defp lane_done({:noreply, %{lane?: true} = state} = reply),
+      do: if(map_size(state.requests) == 0, do: {:stop, :normal, state}, else: reply)
+
+    defp lane_done({:noreply, %{lane?: true} = state, _continue} = reply),
+      do: if(map_size(state.requests) == 0, do: {:stop, :normal, state}, else: reply)
+
+    defp lane_done(reply), do: reply
+
+    defp reconnect_for_request(state) do
+      case connect(state.scheme, state.host, state.port, state.connect_opts) do
+        {:ok, conn} ->
+          generation = state.generation + 1
+
+          Telemetry.execute(
+            :connected,
+            %{generation: generation},
+            Map.put(state.telemetry_metadata, :reconnect, true)
+          )
+
+          {:ok, %{state | conn: conn, lazy_reconnect: false, generation: generation}}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
     end
 
     defp schedule_keepalive(%{keepalive: interval} = state) when is_integer(interval) do
@@ -692,7 +788,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp finish_all_pending_requests(state, reason) do
       count = map_size(state.requests)
       metadata = Map.put(state.telemetry_metadata, :reason, reason)
-      Telemetry.execute(:down, %{streams_terminated: count}, metadata)
+      unless state.lane?, do: Telemetry.execute(:down, %{streams_terminated: count}, metadata)
 
       new_state =
         state.request_stream_queue
@@ -739,6 +835,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
       StreamResponseProcess.consume(pid, :error, error)
       StreamResponseProcess.done(pid)
     end
+
+    # A lane ends with its connection. Nobody is told: it is not the channel's connection.
+    defp maybe_attempt_reconnect(%{lane?: true} = state), do: {:stop, :normal, state}
 
     # The pool already opened a replacement for a draining connection.
     defp maybe_attempt_reconnect(%{draining: true} = state) do
@@ -852,6 +951,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
         Mint.HTTP.open?(state.conn) ->
           check_request_stream_queue(state)
 
+        # An HTTP/1.1 connection closed with nothing in flight: because a call was
+        # cancelled (HTTP/1.1 cannot abandon one request), or the server closed it while
+        # idle. It opens again on the next call, and the channel stays up.
+        match?(%Mint.HTTP1{}, state.conn) and not state.lane? and map_size(state.requests) == 0 ->
+          {:noreply, %{state | lazy_reconnect: true}}
+
         # After a GOAWAY with NO_ERROR the server still answers the streams it accepted.
         # The last one to finish takes this to the clause below.
         is_nil(reason) and map_size(state.requests) > 0 and Mint.HTTP.open?(state.conn, :read) ->
@@ -886,6 +991,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     defp observe_settings(state), do: %{state | settings_known?: true}
+
+    defp emit_streams(%{lane?: true}), do: :ok
 
     defp emit_streams(state) do
       Telemetry.execute(:streams, %{active: map_size(state.requests)}, state.telemetry_metadata)

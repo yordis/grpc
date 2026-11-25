@@ -22,7 +22,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
       settings_known?: false,
       pings_unacked: 0,
       notify_drain: false,
-      draining: false
+      draining: false,
+      lane?: false,
+      lazy_reconnect: false
     ]
 
     def new(conn, opts) do
@@ -38,7 +40,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
         telemetry_metadata: opts[:telemetry_metadata],
         keepalive: opts[:keepalive],
         keepalive_tolerance: opts[:keepalive_tolerance],
-        notify_drain: opts[:notify_drain] || false
+        notify_drain: opts[:notify_drain] || false,
+        lane?: opts[:lane?] || false
       }
     end
 

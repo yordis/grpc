@@ -177,12 +177,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
     @impl true
     def send_data(
           %{
-            channel: %{adapter_payload: %{conn_pid: pid}},
             payload: %{response: {:ok, %{request_ref: request_ref}}}
           } = stream,
           message,
           opts
         ) do
+      pid = conn_pid(stream)
       {:ok, data, _} = GRPC.Message.to_data(message, opts)
       :ok = stream_body(stream, pid, request_ref, data)
       if opts[:send_end_stream], do: stream_body(stream, pid, request_ref, :eof)
@@ -191,24 +191,23 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     @impl true
     def end_stream(
-          %{
-            channel: %{adapter_payload: %{conn_pid: pid}},
-            payload: %{response: {:ok, %{request_ref: request_ref}}}
-          } = stream
+          %{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream
         ) do
+      pid = conn_pid(stream)
       stream_body(stream, pid, request_ref, :eof)
       stream
     end
 
     @impl true
     def cancel(stream) do
-      %{
-        channel: %{adapter_payload: %{conn_pid: conn_pid}},
-        payload: %{response: {:ok, %{request_ref: request_ref}}}
-      } = stream
+      %{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream
 
-      ConnectionProcess.cancel(conn_pid, request_ref)
+      ConnectionProcess.cancel(conn_pid(stream), request_ref)
     end
+
+    # A call that found an HTTP/1.1 connection busy runs on a connection of its own.
+    defp conn_pid(%{payload: %{response: {:ok, %{conn_pid: pid}}}}), do: pid
+    defp conn_pid(%{channel: %{adapter_payload: %{conn_pid: pid}}}), do: pid
 
     # After GOAWAY the connection process fails the call with UNAVAILABLE and gives the
     # error to the response process, so `receive_data/2` returns it. Do not crash here.
@@ -464,10 +463,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
     # shuts it down — least of all when the connection process is the very thing
     # that went away.
     defp give_up_on_request(stream, stream_response_pid) do
-      %{
-        channel: %{adapter_payload: %{conn_pid: conn_pid}},
-        payload: %{response: {:ok, %{request_ref: request_ref}}}
-      } = stream
+      %{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream
+      conn_pid = conn_pid(stream)
 
       quietly(fn -> ConnectionProcess.cancel(conn_pid, request_ref, @cleanup_timeout) end)
       quietly(fn -> GenServer.stop(stream_response_pid, :normal, @cleanup_timeout) end)

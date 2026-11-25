@@ -77,6 +77,35 @@ defmodule Conformance.Client.ChannelsTest do
     assert {:ok, {:channel, 2}} = Channels.checkout(channels, "127.0.0.1:1", test: self())
   end
 
+  # The reference client's transports never die. A kept channel whose connection process
+  # is gone is dropped, so no case gets it, and the next case connects again.
+  test "a kept channel whose connection process exits is dropped and the next case reconnects" do
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+    connect = fn _addr, _opts ->
+      n = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
+      {:ok, {:channel, n, spawn(fn -> Process.sleep(:infinity) end)}}
+    end
+
+    {:ok, channels} =
+      Channels.start_link(
+        connect: connect,
+        ready: fn _ -> :ok end,
+        connection: fn {:channel, _, pid} -> pid end
+      )
+
+    assert {:ok, {:channel, 1, pid}} = Channels.checkout(channels, "127.0.0.1:1", [])
+    assert {:ok, {:channel, 1, ^pid}} = Channels.checkout(channels, "127.0.0.1:1", [])
+
+    ref = Process.monitor(pid)
+    Process.exit(pid, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
+
+    assert {:ok, {:channel, 2, _}} = Channels.checkout(channels, "127.0.0.1:1", [])
+    assert {:ok, {:channel, 2, _}} = Channels.checkout(channels, "127.0.0.1:1", [])
+    assert Process.alive?(channels)
+  end
+
   test "a kept channel is handed out once its connection is ready again" do
     parent = self()
 

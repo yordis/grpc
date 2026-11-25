@@ -110,8 +110,10 @@ defmodule GRPC.Stub do
     * `:accepted_compressors` - the compressors you accept in the reply, as a list.
     * `:codec` - the codec for this call. It overrides the one set in `connect/2`.
     * `:http_method` - `:get` sends a unary call of a channel with `protocol: :connect` as an
-      HTTP GET, with the message in the query. Only a method marked `NO_SIDE_EFFECTS` takes
-      it. Default is `:post`.
+      HTTP GET, with the message in the query. Only a unary method marked `NO_SIDE_EFFECTS`
+      takes it. The value must be `:get` or `:post`, and `:get` on any other call (a method
+      with side effects, a streaming call, a channel that is not `protocol: :connect`) raises
+      `ArgumentError`. Default is `:post`.
     * `:max_receive_message_length` - the largest reply message, in bytes, of this call. It
       overrides the one set in `connect/2`, which overrides the `:max_message_length`
       application setting. A larger reply fails with `RESOURCE_EXHAUSTED`.
@@ -481,7 +483,7 @@ defmodule GRPC.Stub do
   #      with the last elem being a map of headers `%{headers: headers, trailers: trailers}`(unary) or
   #      `%{headers: headers}`(server streaming)
   def call(_service_mod, rpc, %{channel: channel} = stream, request, opts) do
-    {_, {req_mod, req_stream}, {res_mod, response_stream}, _rpc_options} = rpc
+    {_, {req_mod, req_stream}, {res_mod, response_stream}, rpc_options} = rpc
 
     # Options are validated before the channel is resolved so a configuration
     # error raises the same ArgumentError whether or not the connection is
@@ -492,6 +494,10 @@ defmodule GRPC.Stub do
       else
         parse_req_opts([{:timeout, @default_timeout} | opts])
       end
+
+    with {:ok, method} <- Keyword.fetch(opts, :http_method) do
+      validate_http_method!(method, channel.protocol, req_stream || response_stream, rpc_options)
+    end
 
     if not is_list(Keyword.get(opts, :accepted_compressors, [])) do
       raise ArgumentError, "accepted_compressors is not a list"
@@ -1250,6 +1256,31 @@ defmodule GRPC.Stub do
 
   defp unregister_cancel(nil), do: :ok
   defp unregister_cancel(handle), do: GRPC.Client.CancelHandle.unregister(handle)
+
+  defp validate_http_method!(:post, _protocol, _streaming?, _rpc_options), do: :ok
+
+  defp validate_http_method!(:get, protocol, streaming?, rpc_options) do
+    cond do
+      protocol != :connect ->
+        raise ArgumentError,
+              "http_method: :get needs a channel with protocol: :connect, " <>
+                "this channel uses protocol: #{inspect(protocol)}"
+
+      streaming? ->
+        raise ArgumentError, "http_method: :get is for unary calls, this call is streaming"
+
+      Map.get(rpc_options, :idempotency_level) != :NO_SIDE_EFFECTS ->
+        raise ArgumentError,
+              "http_method: :get is for methods marked NO_SIDE_EFFECTS, this method is not"
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_http_method!(other, _protocol, _streaming?, _rpc_options) do
+    raise ArgumentError, "http_method must be :get or :post, got: #{inspect(other)}"
+  end
 
   @valid_req_opts [
     :timeout,

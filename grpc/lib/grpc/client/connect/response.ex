@@ -76,12 +76,29 @@ defmodule GRPC.Client.Connect.Response do
   def consume(%{kind: :unary, status: 200} = response, :done) do
     trailers = {:trailers, trailers(response.headers)}
 
-    with {:ok, body} <- decompress(response, "content-encoding", response.body),
+    with :ok <- check_content_type(response),
+         {:ok, body} <- decompress(response, "content-encoding", response.body),
          {:ok, reply} <-
            GRPC.Client.ReplyDecoder.decode(response.codec, body, response.response_mod) do
       {response, [{:ok, reply}, trailers], :ok}
     else
       {:error, error} -> {response, [trailers, {:error, error}], :ok}
+    end
+  end
+
+  # A reply that is not `application/<something>` is not from a Connect server. A codec
+  # that is not the expected one fails to decode further down.
+  defp check_content_type(response) do
+    case header_value(response.headers, "content-type") do
+      "application/" <> _ ->
+        :ok
+
+      content_type ->
+        {:error,
+         GRPC.RPCError.exception(
+           GRPC.Status.unknown(),
+           "Invalid content-type #{inspect(content_type)} in the response"
+         )}
     end
   end
 
@@ -96,9 +113,14 @@ defmodule GRPC.Client.Connect.Response do
       response = %{response | body: rest}
 
       case envelope(response, flag, payload) do
-        {:message, reply} -> drain(response, [{:ok, reply} | items])
-        {:end_stream, end_items} -> {%{response | ended: true}, Enum.reverse(items, end_items), :ok}
-        {:error, error} -> {%{response | ended: true}, Enum.reverse(items, [{:error, error}]), :cancel}
+        {:message, reply} ->
+          drain(response, [{:ok, reply} | items])
+
+        {:end_stream, end_items} ->
+          {%{response | ended: true}, Enum.reverse(items, end_items), :ok}
+
+        {:error, error} ->
+          {%{response | ended: true}, Enum.reverse(items, [{:error, error}]), :cancel}
       end
     else
       {:error, error} ->
@@ -154,13 +176,8 @@ defmodule GRPC.Client.Connect.Response do
             {:end_stream, items}
 
           %{} = error_json ->
-            case error(error_json) do
-              {:ok, error} ->
-                {:end_stream, items ++ [{:error, %{error | trailers: trailers}}]}
-
-              :error ->
-                {:error, bad_end_stream()}
-            end
+            error = error(error_json, GRPC.Status.unknown())
+            {:end_stream, items ++ [{:error, %{error | trailers: trailers}}]}
 
           _ ->
             {:error, bad_end_stream()}
@@ -176,32 +193,44 @@ defmodule GRPC.Client.Connect.Response do
 
   defp end_metadata(%{} = metadata) do
     metadata
-    |> Enum.flat_map(fn {key, values} -> for value <- List.wrap(values), do: {key, to_string(value)} end)
+    |> Enum.flat_map(fn {key, values} ->
+      for value <- List.wrap(values), do: {key, to_string(value)}
+    end)
     |> HTTP2.decode_headers()
   end
 
   defp end_metadata(_metadata), do: %{}
 
-  # The error of a failed unary call is a JSON body. Without one, the HTTP status says what
-  # went wrong.
-  defp unary_error(%{status: status, body: body}) do
-    with {:ok, %{} = json} <- Jason.decode(body),
-         {:ok, error} <- error(json) do
+  # The error of a failed response is a JSON body, possibly compressed. Without one, the HTTP
+  # status says what went wrong, and where the JSON has no usable code it does too.
+  defp unary_error(%{status: status} = response) do
+    fallback = HTTP2.status_from_http(status)
+
+    error =
+      with {:ok, body} <- decompress(response, "content-encoding", response.body),
+           {:ok, %{} = json} <- Jason.decode(body) do
+        error(json, fallback)
+      else
+        _ -> GRPC.RPCError.exception(fallback, "HTTP status #{status}")
+      end
+
+    %{
       error
-    else
-      _ -> GRPC.RPCError.exception(HTTP2.status_from_http(status), "HTTP status #{status}")
-    end
+      | headers: response_headers(response, response.headers || []),
+        trailers: trailers(response.headers || [])
+    }
   end
 
   # The JSON of an error, in the body of a unary response and in the end of a stream.
-  defp error(%{"code" => code} = json) do
-    with {:ok, status} <- code_status(code) do
-      {:ok,
-       %GRPC.RPCError{status: status, message: json["message"], details: details(json["details"])}}
-    end
-  end
+  defp error(json, fallback) do
+    status =
+      case code_status(json["code"]) do
+        {:ok, status} -> status
+        :error -> fallback
+      end
 
-  defp error(_json), do: :error
+    %GRPC.RPCError{status: status, message: json["message"], details: details(json["details"])}
+  end
 
   @codes ~w(
     ok canceled unknown invalid_argument deadline_exceeded not_found already_exists

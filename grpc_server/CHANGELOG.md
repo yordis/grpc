@@ -4,25 +4,49 @@
 
 ### Enhancements
 
+  * The server speaks the Connect protocol (https://connectrpc.com/docs/protocol). A call that arrives with a Connect content type reaches the same handler as a gRPC call, and `stream.access_mode` is `:connectrpc`. Unary, client, server and bidirectional streaming calls work, over HTTP/1.1 and HTTP/2, with proto and JSON, identity and gzip. A unary method marked `idempotency_level = NO_SIDE_EFFECTS` is also served as GET. Connect errors, `connect-timeout-ms` and `connect-protocol-version` are handled, and a request with an unsupported verb or content type gets a Connect error. The `GRPC.Server.Test` helpers accept the new access mode. The Connect protocol is covered by the Connect conformance suite, which also covers gRPC and gRPC-Web (see `conformance/README.md`).
+
+  * The server keeps an HTTP/1.1 connection alive when the router answers a call itself, for example for an unknown method, and when a reply precedes the end of a chunked request body. An idle HTTP/1.1 connection lasts as long as an idle HTTP/2 one.
+
   * New `GRPC.Server.Stream.timeout_ms/1` returns the timeout the client sent, in milliseconds, or `nil`. It reads `grpc-timeout` for gRPC and gRPC-Web and `connect-timeout-ms` for Connect, so a handler or interceptor needs no header parsing. `GRPC.Server.Stream` has a new `:timeout_ms` field.
 
 ### Behavior Changes
 
-  * The Connect protocol is opt-in: a server serves it only when it sets `use GRPC.Server, service: ..., connect: true`. With the option off, which is the default, a request keeps the protocol it had before Connect: a `POST` with `application/json` to a gRPC path is a transcoded call, with `grpc-status` trailers and the gRPC to HTTP status map, not a Connect call with a JSON error body. `application/proto`, `application/connect+*` and `GET ?encoding=...` are served only with the option on. Upgrade note: set `connect: true` on each `use GRPC.Server` that should answer Connect clients (the Connect conformance server does so).
+  * The Connect protocol is opt-in: a server serves it only when it sets `use GRPC.Server, service: ..., connect: true`. With the option off, which is the default, a request keeps the protocol it had before Connect: a `POST` with `application/json` to a gRPC path is a transcoded call, with `grpc-status` trailers and the gRPC to HTTP status map, not a Connect call with a JSON error body. `application/proto`, `application/connect+*` and `GET ?encoding=...` are served only with the option on. Upgrade: set `connect: true` on each `use GRPC.Server` that should answer Connect clients (the Connect conformance server does so).
 
-  * `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. If you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
+  * Breaking: the limit of what the server sends is independent of the receive limit. `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. Upgrade: if you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
+
+  * With `connect: true`, a `POST` whose content type is neither gRPC nor Connect gets HTTP 415. Before, the server handled it as gRPC with proto. When the request has no `Content-Type`, the server falls back to `Accept`, so a `POST` without a content type and with `Accept: */*`, the `curl` default, gets 415, and one with `Accept: application/json` is read as Connect with JSON. A server without `connect: true` is not changed. Upgrade: send a `Content-Type` of gRPC, gRPC-Web or Connect.
+
+  * An error keeps the trailers a handler set with `GRPC.Server.set_trailers/2`, and custom headers go in a HEADERS frame ahead of the error trailers. An error is no longer Trailers-Only once a handler or interceptor set any header. The CORS interceptor always sets headers, so a gRPC-Web server with CORS answers an error with a header block and then trailers. Upgrade: a client that expected a Trailers-Only error from such a server must read the status from the trailers.
+
+  * The trailer block of a gRPC-Web response ends every line with CRLF, as the protocol says. The bytes on the wire change.
+
+  * The server sets the HTTP/2 flow control window margins to 0, so the window it announces follows what a stream asked for.
+
+  * The server drains an HTTP/1.1 request body of up to 1 MB, for up to 1 second, when it ends a call or the router answers 400 or 404 before the handler reads it, so the connection can serve the next request.
 
 ### Bug Fixes
 
-  * A Connect request whose content type does not fit the method is refused with HTTP 415, and `Accept-Post` names the content types the method takes. A unary content type (`application/proto`, `application/json`) on a streaming method used to give a server stream only its last message, and a client stream read the unary body as envelopes. The streaming content types (`application/connect+*`) on a unary method are refused too. Upgrade note: a Connect client must use the unary content types for unary methods and the streaming ones for the rest, as the Connect spec says.
+  * A Connect request whose content type does not fit the method is refused with HTTP 415, and `Accept-Post` names the content types the method takes. A unary content type (`application/proto`, `application/json`) on a streaming method used to give a server stream only its last message, and a client stream read the unary body as envelopes. The streaming content types (`application/connect+*`) on a unary method are refused too. Upgrade: a Connect client must use the unary content types for unary methods and the streaming ones for the rest, as the Connect spec says.
 
   * A call's deadline timer is cancelled when its reply is complete, and a deadline that still arrives after the reply is ignored. Before, a Connect unary call whose deadline fired between the reply and the end of the RPC process made the request process crash with `response_already_sent`, and a Ranch error report. No upgrade action is needed.
 
-  * An HTTP/1.1 connection that sends no request is closed again, after 60 seconds. The adapter had set Cowboy's `request_timeout` to `:idle_timeout`, which defaults to `:infinity`, so idle sockets lived forever and could fill `:max_connections`. The `:request_timeout` adapter option (default `60000`) is independent of `:idle_timeout`. The default is above Cowboy's 5 seconds on purpose, so a client that reuses a kept-alive connection does not hit a close. Upgrade note: set `adapter_opts: [request_timeout: ...]` to change it, or `:infinity` to restore the previous behavior.
+  * An HTTP/1.1 connection that sends no request is closed again, after 60 seconds. The adapter had set Cowboy's `request_timeout` to `:idle_timeout`, which defaults to `:infinity`, so idle sockets lived forever and could fill `:max_connections`. The `:request_timeout` adapter option (default `60000`) is independent of `:idle_timeout`. The default is above Cowboy's 5 seconds on purpose, so a client that reuses a kept-alive connection does not hit a close. Upgrade: set `adapter_opts: [request_timeout: ...]` to change it, or `:infinity` to restore the previous behavior.
 
-  * The default `:max_body_size` (4 MiB) no longer cuts off a long-lived client-streaming or bidirectional call once its messages add up to 4 MiB. The default applies only to a call whose request is one body (unary and server streaming, over gRPC, gRPC-Web, Connect and transcoding). A request stream is bounded per message by `:max_message_length`. An explicit `:max_body_size` still caps the total of a request stream. Upgrade note: if you set `:max_body_size` only to cap a stream's total, it still does; if you relied on the unreleased default to cap streams, set `:max_body_size` explicitly.
+  * Breaking: the 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. Upgrade: a server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size`, to a larger number of bytes or to `:infinity`.
 
-  * The 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. A server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size` (a behavior change).
+  * The default `:max_body_size` (4 MiB) no longer cuts off a long-lived client-streaming or bidirectional call once its messages add up to 4 MiB. The default applies only to a call whose request is one body (unary and server streaming, over gRPC, gRPC-Web, Connect and transcoding). A request stream is bounded per message by `:max_message_length`. An explicit `:max_body_size` still caps the total of a request stream. Upgrade: if you set `:max_body_size` only to cap a stream's total, it still does; if you relied on the unreleased default to cap streams, set `:max_body_size` explicitly.
+
+  * A gRPC-Web response echoes the request's `grpc-web` content type.
+
+  * A gRPC call with a JSON codec is answered as `application/grpc+json`.
+
+  * A gRPC call that fails before it starts is answered with a gRPC content type.
+
+  * Content types of Connect no longer log an invalid content-type warning.
+
+  * A connection no longer starves its window when streams end with data the server did not ask for.
 
   * A server stream no longer hangs when two calls on one connection fill Cowboy's send buffers. If a stream waited for its stream buffer to drain and the connection buffer then filled, the second alarm made the stream forget it was waiting. When the buffers drained it got no ack, and the call never ended, however fast the client read (#652).
 

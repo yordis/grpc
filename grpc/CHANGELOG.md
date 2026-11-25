@@ -2,24 +2,44 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * The client speaks the Connect protocol (https://connectrpc.com/docs/protocol) with the Mint and Gun adapters. Pass `protocol: :connect` to `GRPC.Stub.connect/2`. Unary, client, server and bidirectional streaming calls work, over HTTP/1.1 and HTTP/2, h2c and TLS, with proto and JSON, identity and gzip. Connect errors keep their headers and trailers, and an error without a code takes the code of the HTTP status. A unary call goes as GET with the new `http_method: :get` call option, for a method without side effects. It is covered by the Connect conformance suite (see `conformance/README.md`).
+
 ### Behavior Changes
 
   * The optional `:gun` dependency is now `~> 2.8.0` (was `~> 2.7.0`), with cowlib 2.22.0. Gun 2.7 and earlier crash on a DATA frame that cowlib 2.22 reports for a stream that was already reset, and gun 2.8 handles it, so an app on cowlib 2.22 or later needs gun 2.8. Gun 2.8 requires cowlib 2.22.0 or newer. The lock files now use cowboy 2.21.0, the first cowboy that handles the same cowlib 2.22 return value.
 
   * A server stream reset (RST_STREAM) now fails the call with the status of the gRPC HTTP/2 spec, the same on the Mint and Gun adapters: `UNAVAILABLE` for REFUSED_STREAM, `CANCELLED` for CANCEL, `RESOURCE_EXHAUSTED` for ENHANCE_YOUR_CALM, `PERMISSION_DENIED` for INADEQUATE_SECURITY and `INTERNAL` for the rest. The message names the code and no longer holds internal terms.
+
   * Breaking: the process that buffers the reply of a Mint call, and the process that reads the replies of a Gun Connect or gRPC-Web call, now end with the process that made the call, and the request is reset. A stream opened in a Task ends when the Task exits. Upgrade: read a server stream in the process that opened it, or keep that process alive until the stream is read. A server stream that the caller stops reading (`Enum.take/2`) is reset on Mint and Gun.
+
   * Breaking: Connect and gRPC-Web channels on `http://` now speak HTTP/2 with prior knowledge (h2c) by default, on both the Mint and Gun adapters. The Mint adapter used HTTP/1.1 and Gun used whichever the server answered. On `https://` ALPN still picks the version. Upgrade: for a plaintext server that only speaks HTTP/1.1, connect with `adapter_opts: [protocols: [:http1]]`. A list with both versions, such as `[:http1, :http2]`, is HTTP/2 on `http://`, because a plaintext connection has no negotiation.
+
   * Breaking: the `:http_method` call option is validated and raises `ArgumentError` where it was silently ignored. `:get` is allowed only for a unary method marked `NO_SIDE_EFFECTS` on a Connect channel. Any other value is rejected, and so is `:get` on a gRPC or gRPC-Web channel, on a streaming call, or on a method with side effects. Upgrade: drop `http_method: :get` from such calls, or mark the method `NO_SIDE_EFFECTS`.
+
   * Breaking: the `:protocols` adapter option of the Mint and Gun adapters is validated in `GRPC.Stub.connect/2`. It must be a non-empty list of unique `:http1` and `:http2` values, and a `:grpc` channel accepts only `[:http2]`. The Gun adapter now takes `:http1` and `:http2` for this option. Upgrade: replace Gun protocol names such as `:http` with `:http1`.
+
   * `GRPC.Client.Adapter` gained the optional callbacks `supported_protocols/0` and `validate_opts/2`. `GRPC.Stub.connect/2` asks the adapter which `:protocol` values it speaks, in place of a fixed list of adapters. An adapter without `supported_protocols/0` is taken to speak `:grpc` only, so a third-party adapter that serves Connect or gRPC-Web must declare it.
+
   * `GRPC.Stub.connect/2` documents the `:protocol` option, and `GRPC.Client.Connection` documents how the HTTP version is chosen.
 
 ### Bug Fixes
 
   * A reply that cannot be decompressed fails with `INTERNAL` on every adapter and protocol, through one shared path.
+
   * A Connect error body is bounded (the receive limit, at most 64 KiB) and fails the call cleanly when it is larger.
+
   * The Gun adapter no longer leaks the process that reads the replies of a streaming Connect or gRPC-Web call.
+
   * On HTTP/1.1, the Mint and Gun adapters carry one call at a time per connection, and no call breaks another. A call that finds the connection busy opens a connection of its own for that one call, so an open client stream or a long server stream no longer makes other calls on the channel fail with `UNKNOWN` or wait behind it. A cancel or a deadline closes the HTTP/1.1 connection that carried the call, since HTTP/1.1 cannot abandon one request, and the channel opens it again on the next call. Before, the Mint connection process stopped, and the next call on the channel exited with no process. Gun kept waiting for the cancelled response, and the calls after it waited too. A channel opens at most `:http1_max_connections` connections over HTTP/1.1 (adapter option, default `8`, a positive integer; `1` makes the calls take the one connection in turn). Calls over the limit wait for a connection to free, up to 5 seconds, and fail with `UNAVAILABLE`; a call whose deadline passes while it waits fails with `DEADLINE_EXCEEDED`, and a cancelled call leaves the queue. HTTP/2 is not changed.
+
+  * Errors carry the headers and trailers of the reply as `%GRPC.RPCError{}` fields. A reply that ends without `grpc-status` is an error, an HTTP status without `grpc-status` maps to a gRPC status, and the trailers decide the status on Mint when the headers carry one. A reply that is not `application/grpc`, that the codec cannot decode, or that carries unexpected extra messages fails the call, and a compressed message is rejected when no compression was negotiated.
+
+  * A Mint stream that is cancelled ends with `CANCELLED`, one reset in the middle of a stream ends with an `RPCError`, and a streaming call is bound by its timeout. A server CANCEL reset after the deadline is `DEADLINE_EXCEEDED`. The response metadata of a client stream is kept.
+
+  * The Gun adapter decompresses compressed streamed replies. Both adapters keep every value of a repeated header and send binary metadata values unpadded.
+
   * The Mint adapter no longer leaks a `StreamResponseProcess` when the call to the connection process exits, because the process is gone, dies during the call, or takes longer than the call timeout.
 
 ## v1.1.0 - 2026-11-13
@@ -46,7 +66,7 @@
   * The optional `:gun` dependency is now `~> 2.7.0` (was `~> 2.4.0`), which picks up the security fixes in gun 2.5, 2.6 and 2.7. Gun 2.6 and later require Erlang/OTP 27 or newer, so apps that use the Gun adapter must run on OTP 27+.
   * Test suites that define a Mox mock for the `GRPC.Client.Adapter` behaviour must stub the new validation callback. Mox generates optional callbacks on mocks, so `GRPC.Client.Connection` calls `validate_opts/1` on the mock and Mox raises `UnexpectedCallError` when it is not stubbed. Adapters that implement the behaviour with `@behaviour` and do not define `validate_opts/1` are unaffected.
   * The Mint adapter now returns `%GRPC.RPCError{}` instead of a bare string when a request or a queued stream body write hits a closed connection (`UNAVAILABLE`) or a cancelled request (`CANCELLED`), matching how the Gun adapter surfaces transport errors.
-* Connection errors under the Mint adapter now uniformly surface errors with gRPC status `UNAVAILABLE` instead of `UNKNOWN`.
+  * Connection errors under the Mint adapter now uniformly surface errors with gRPC status `UNAVAILABLE` instead of `UNKNOWN`.
 
 ### Bug Fixes
 

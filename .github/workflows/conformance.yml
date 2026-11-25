@@ -1,0 +1,83 @@
+---
+name: Conformance
+
+'on':
+  pull_request:
+    branches:
+      - "**"
+  push:
+    branches:
+      - master
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Server (gRPC, gRPC-Web, Connect)
+            config: config/full.yaml
+            adapter: mint
+            log: server
+          - name: Client gRPC, Mint adapter
+            config: config/client.yaml
+            adapter: mint
+            log: client-grpc-mint
+          - name: Client gRPC, Gun adapter
+            config: config/client.yaml
+            adapter: gun
+            log: client-grpc-gun
+          - name: Client gRPC-Web, Mint adapter
+            config: config/client.grpcweb.yaml
+            adapter: mint
+            log: client-grpcweb-mint
+          - name: Client gRPC-Web, Gun adapter
+            config: config/client.grpcweb.yaml
+            adapter: gun
+            log: client-grpcweb-gun
+          - name: Client Connect, Mint adapter
+            config: config/client.connect.yaml
+            adapter: mint
+            log: client-connect-mint
+          - name: Client Connect, Gun adapter
+            config: config/client.connect.yaml
+            adapter: gun
+            log: client-connect-gun
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: 28.x
+          elixir-version: 1.20.x
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v4
+        id: mix-cache  # id to use in retrieve action
+        with:
+          path: |
+            conformance/deps
+            conformance/_build
+          key: >-
+            v1-conformance-mix-${{
+            hashFiles('conformance/mix.lock', 'conformance/mix.exs',
+            'grpc/mix.exs', 'grpc_server/mix.exs', 'grpc_core/mix.exs') }}
+      - name: Fetch conformance runner
+        run: conformance/bin/fetch-runner
+      - name: Run conformance suite
+        env:
+          CLIENT_ADAPTER: ${{ matrix.adapter }}
+          # Keeps the bytes each client or server read and wrote, so a failure has evidence.
+          CONFORMANCE_CAPTURE_DIR: ${{ github.workspace }}/conformance/logs/capture
+        run: |
+          mkdir -p logs
+          ./run.sh ${{ matrix.config }} 2>&1 | tee logs/${{ matrix.log }}.log
+        shell: bash
+        working-directory: ./conformance
+      - name: Upload runner logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-logs-${{ matrix.log }}
+          path: conformance/logs/
+          if-no-files-found: ignore

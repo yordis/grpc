@@ -14,6 +14,7 @@ defmodule GRPC.Integration.ScriptedH2Server do
     * `{:headers, [{name, value}], :fin}` - the same, ending the stream
     * `{:data, binary}` / `{:data, binary, :fin}` - a DATA frame
     * `{:rst, error_code}` - a RST_STREAM frame
+    * `{:sleep, ms}` - waits before the next step
     * `:close` - closes the TCP connection
   """
 
@@ -99,6 +100,11 @@ defmodule GRPC.Integration.ScriptedH2Server do
   defp run(socket, [:close | _], _state, _stream) do
     :gen_tcp.close(socket)
     :closed
+  end
+
+  defp run(socket, [{:sleep, ms} | rest], state, stream) do
+    Process.sleep(ms)
+    run(socket, rest, state, stream)
   end
 
   defp run(socket, [{:rst, code} | rest], state, stream) do

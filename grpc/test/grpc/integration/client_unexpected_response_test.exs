@@ -114,6 +114,22 @@ defmodule GRPC.Integration.ClientUnexpectedResponseTest do
         assert status in [@internal, @unknown]
       end
 
+      test "a reply in another codec than the request is an error, not a crash", %{
+        adapter: adapter
+      } do
+        body = ~s({"payload": {"data": "dGVzdCByZXNwb25zZQ"}})
+        framed = <<0, byte_size(body)::32, body::binary>>
+
+        port =
+          ScriptedH2Server.start([
+            {:headers, [{":status", "200"}, {"content-type", "application/grpc+json"}]},
+            {:data, framed},
+            {:headers, @ok_trailers, :fin}
+          ])
+
+        assert {:error, %GRPC.RPCError{}} = adapter |> then(&connect(port, &1)) |> unary()
+      end
+
       test "a reply that is not application/grpc is unknown", %{adapter: adapter} do
         msg = frame(%Helloworld.HelloReply{message: "hi"})
 

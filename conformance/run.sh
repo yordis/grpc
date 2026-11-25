@@ -7,6 +7,7 @@
 #
 # Environment:
 #   CLIENT_ADAPTER  mint (default) or gun; selects the client adapter in client mode.
+#   CONFORMANCE_ENV  Mix environment to compile and run, dev by default.
 #   CONFORMANCE_CAPTURE_DIR  when set, keeps the bytes each client or server read and wrote, and
 #                   its stderr with times, as <dir>/<time>.<pid>.{in,out,err} (see bin/capture).
 #                   Gates set it, so a failure always has evidence.
@@ -23,6 +24,9 @@ config="${1:-}"
 [ -n "$config" ] || { echo "usage: $0 [connectconformance] <config.yaml> [args...]" >&2; exit 2; }
 shift
 [ -x "$runner" ] || { echo "runner not found: $runner (run conformance/bin/fetch-runner)" >&2; exit 2; }
+# Compile and copy the same build the launchers load.
+MIX_ENV="${CONFORMANCE_ENV:-dev}"
+export MIX_ENV
 (cd "$here" && mix deps.get && mix compile) >&2 </dev/null
 
 # The runner starts a program per test case for as long as the run lasts, and another run's

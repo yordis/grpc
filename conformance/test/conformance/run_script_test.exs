@@ -43,7 +43,7 @@ defmodule Conformance.RunScriptTest do
   @tag :tmp_dir
   test "run.sh runs the programs from a private copy of the build", %{tmp_dir: tmp} do
     runner = Path.join(tmp, "runner")
-    shared = Path.expand("../../_build/dev/lib", __DIR__)
+    shared = Path.expand("../../_build/#{Mix.env()}/lib", __DIR__)
 
     File.write!(runner, """
     #!/bin/sh

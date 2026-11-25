@@ -73,7 +73,8 @@ defmodule Conformance.LauncherTest do
         :binary,
         :exit_status,
         args: ["run", "--no-compile", "--no-deps-check", "-e", expression],
-        cd: @root
+        cd: @root,
+        env: [{~c"MIX_ENV", ~c"#{Mix.env()}"}]
       ])
 
     stop_on_exit(port)

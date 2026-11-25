@@ -5,18 +5,20 @@ defmodule GRPC.Integration.ClientAbandonedStreamTest do
 
   @response_processes [
     {GRPC.Client.Adapters.Mint.StreamResponseProcess, :init, 1},
-    {GRPC.Client.Adapters.Gun.StreamResponseProcess, :init, 1}
+    {GRPC.Client.Adapters.Gun.StreamResponseProcess, :init, 1},
+    {GRPC.Client.Adapters.Gun.ReplyReader, :init, 1}
   ]
 
-  defmodule EndlessServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service
+  defmodule OpenServer do
+    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true
 
     def list_features(_rect, stream) do
       send(:persistent_term.get({__MODULE__, :test}), {:handler, self()})
-      feature = %Routeguide.Feature{name: String.duplicate("x", 1000)}
+      feature = %Routeguide.Feature{name: "x"}
 
-      Stream.repeatedly(fn -> GRPC.Server.send_reply(stream, feature) end)
-      |> Stream.run()
+      GRPC.Server.send_reply(stream, feature)
+      GRPC.Server.send_reply(stream, feature)
+      Process.sleep(:infinity)
     end
   end
 
@@ -85,12 +87,12 @@ defmodule GRPC.Integration.ClientAbandonedStreamTest do
       @describetag adapter: adapter, protocol: protocol
 
       setup do
-        :persistent_term.put({EndlessServer, :test}, self())
-        on_exit(fn -> :persistent_term.erase({EndlessServer, :test}) end)
+        :persistent_term.put({OpenServer, :test}, self())
+        on_exit(fn -> :persistent_term.erase({OpenServer, :test}) end)
       end
 
       test "taking a part of a server stream resets the stream", ctx do
-        run_server(EndlessServer, fn port ->
+        run_server(OpenServer, fn port ->
           channel = connect(port, ctx.adapter, ctx.protocol)
           before = snapshot()
 
@@ -103,7 +105,7 @@ defmodule GRPC.Integration.ClientAbandonedStreamTest do
       end
 
       test "a caller that exits without reading the stream resets the stream", ctx do
-        run_server(EndlessServer, fn port ->
+        run_server(OpenServer, fn port ->
           channel = connect(port, ctx.adapter, ctx.protocol)
           test = self()
 

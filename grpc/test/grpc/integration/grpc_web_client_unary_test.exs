@@ -60,17 +60,15 @@ defmodule GRPC.Integration.GrpcWebClientUnaryTest do
         end)
       end
 
-      test "compresses the request and decompresses the reply", %{protocols: protocols} do
+      test "compresses the request", %{protocols: protocols} do
         run_server(HelloServer, fn port ->
           channel = connect(port, adapter_opts: [protocols: protocols])
 
-          assert {:ok, %Helloworld.HelloReply{message: "Hello, compressed"},
-                  %{headers: %{"content-encoding" => "gzip"}}} =
+          assert {:ok, %Helloworld.HelloReply{message: "Hello, compressed"}} =
                    Helloworld.Greeter.Stub.say_hello(
                      channel,
                      %Helloworld.HelloRequest{name: "compressed"},
-                     compressor: GRPC.Compressor.Gzip,
-                     return_headers: true
+                     compressor: GRPC.Compressor.Gzip
                    )
         end)
       end

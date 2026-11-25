@@ -16,7 +16,7 @@ defmodule GRPC.Channel do
     * `:cred` - credentials used for authentication
     * `:adapter` - a client adapter module, like `GRPC.Client.Adapters.Gun`
     * `:codec` - a default codec for this channel
-    * `:protocol` - the wire protocol of the calls, `:grpc` (default) or `:connect`
+    * `:protocol` - the wire protocol of the calls, `:grpc` (default), `:connect` or `:grpc_web`
     * `:adapter_payload` - payload the adapter uses
   """
 

@@ -81,8 +81,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
       is_nil(state.requests[ref].response[:headers])
     end
 
-    def connect?(state, ref) do
-      state.requests[ref][:protocol] == :connect
+    # The response of these protocols is handed to its response process as it comes.
+    def raw_response?(state, ref) do
+      state.requests[ref][:protocol] in [:connect, :grpc_web]
     end
 
     def stream_response_pid(state, ref) do

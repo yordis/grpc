@@ -399,12 +399,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
       %{state | pings_unacked: state.pings_unacked - pongs}
     end
 
-    # A Connect response is handed to its response process as it comes: it decides what the
+    # A Connect or gRPC-Web response is handed to its response process as it comes: it decides what the
     # status and the headers mean.
     defp route_response(response, state) do
       ref = elem(response, 1)
 
-      if State.has_request_ref(state, ref) and State.connect?(state, ref) do
+      if State.has_request_ref(state, ref) and State.raw_response?(state, ref) do
         process_connect_response(response, state)
       else
         process_response(response, state)

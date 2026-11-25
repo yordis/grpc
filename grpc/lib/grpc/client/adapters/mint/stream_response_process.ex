@@ -19,7 +19,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # telemetry events in case of failures
 
   @accepted_types [:data, :trailers, :headers, :error, :status]
-  @connect_events [:status, :headers, :trailers, :data]
+  @raw_events [:status, :headers, :trailers, :data]
   @header_types [:headers, :trailers]
 
   use GenServer
@@ -137,17 +137,20 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       data_seen: false,
       # The response ended with a `grpc-status`, or with an error, so it is complete.
       terminated: false,
-      # The state of a Connect response, which has no `grpc-status`.
-      connect: connect_response(stream)
+      # The state of a Connect or gRPC-Web response, which a protocol module reads.
+      connect: raw_response(stream)
     }
 
     {:ok, state}
   end
 
-  defp connect_response(%{channel: %{protocol: :connect}} = stream),
+  defp raw_response(%{channel: %{protocol: :connect}} = stream),
     do: GRPC.Client.Connect.Response.new(stream)
 
-  defp connect_response(_stream), do: nil
+  defp raw_response(%{channel: %{protocol: :grpc_web}} = stream),
+    do: GRPC.Client.GrpcWeb.Response.new(stream)
+
+  defp raw_response(_stream), do: nil
 
   @impl true
   def handle_call(:get_response, from, state) do
@@ -156,7 +159,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
   def handle_call({:consume_response, event}, _from, %{connect: connect} = state)
       when connect != nil and
-             (event == :done or (is_tuple(event) and elem(event, 0) in @connect_events)) do
+             (event == :done or (is_tuple(event) and elem(event, 0) in @raw_events)) do
     cond do
       state.failed ->
         {:reply, :cancel, state, {:continue, :produce_response}}
@@ -306,7 +309,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   end
 
   defp consume_connect(event, %{connect: connect} = state) do
-    {connect, items, action} = GRPC.Client.Connect.Response.consume(connect, event)
+    {connect, items, action} = connect.__struct__.consume(connect, event)
     state = %{state | connect: connect}
     state = Enum.reduce(items, state, &queue_connect_item/2)
 

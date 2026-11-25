@@ -58,8 +58,14 @@ if Code.ensure_loaded?(Mint.HTTP) do
       request = {:request, method, path, headers, body, opts}
 
       case Adapter.call(pid, request) do
-        {:busy, spec} -> request_on_lane(pid, spec, request)
-        reply -> reply
+        {:busy, spec} ->
+          case request_on_lane(pid, spec, request) do
+            :retry -> request(pid, method, path, headers, body, opts)
+            reply -> reply
+          end
+
+        reply ->
+          reply
       end
     end
 
@@ -369,7 +375,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     @impl true
     def handle_cast({:reserve_lane, caller, tag}, state),
-      do: {:noreply, %{state | lanes: HTTP1Lanes.reserve(state.lanes, caller, tag)}}
+      do:
+        {:noreply,
+         %{state | lanes: HTTP1Lanes.reserve(state.lanes, caller, tag, main_idle?(state))}}
 
     def handle_cast({:release_lane, token}, state),
       do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, token)}}
@@ -477,7 +485,23 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp lane_done({:noreply, %{lane?: true} = state, _continue} = reply),
       do: if(map_size(state.requests) == 0, do: {:stop, :normal, state}, else: reply)
 
+    # The connection of the channel has no call: a call that waits for a connection of
+    # the channel takes it.
+    defp lane_done({:noreply, state}), do: {:noreply, main_idle(state)}
+    defp lane_done({:noreply, state, continue}), do: {:noreply, main_idle(state), continue}
+
     defp lane_done(reply), do: reply
+
+    defp main_idle?(%{lane?: false, conn: %Mint.HTTP1{}} = state),
+      do: map_size(state.requests) == 0
+
+    defp main_idle?(_state), do: false
+
+    defp main_idle(state) do
+      if main_idle?(state),
+        do: %{state | lanes: HTTP1Lanes.main_idle(state.lanes)},
+        else: state
+    end
 
     defp reconnect_for_request(state) do
       case connect(state.scheme, state.host, state.port, state.connect_opts) do

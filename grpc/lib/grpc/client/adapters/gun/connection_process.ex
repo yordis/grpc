@@ -102,37 +102,48 @@ if Code.ensure_loaded?(:gun) do
     # carries the pid that holds the stream, and the data, cancel and deadline calls
     # go to it.
     defp on_lane({:busy, {channel, open_opts}}, pid, request, opts) do
-      with {:ok, token} <- acquire_lane(pid, request, opts) do
-        case GenServer.start(__MODULE__, {channel, Map.put(open_opts, :lane?, true)}) do
-          {:ok, lane} ->
-            try do
-              timeout =
-                Map.get(open_opts, :await_timeout, @default_await_timeout) +
-                  @await_up_call_margin_ms
+      case acquire_lane(pid, request, opts) do
+        :retry ->
+          pid |> Adapter.call(request) |> on_lane(pid, request, opts)
 
-              with :ok <- HTTP1Lanes.attach(pid, token, lane),
-                   :ok <- GenServer.call(lane, :await_up, timeout),
-                   {:ok, response} <- Adapter.call(lane, request) do
-                {:ok, Map.put(response, :conn_pid, lane)}
-              else
-                {:error, _reason} = error ->
-                  stop_lane(lane)
-                  error
-              end
-            catch
-              :exit, reason ->
-                stop_lane(lane)
-                :erlang.raise(:exit, reason, __STACKTRACE__)
-            end
+        {:error, _reason} = error ->
+          error
 
-          {:error, reason} ->
-            HTTP1Lanes.release(pid, token)
-            {:error, reason}
-        end
+        {:ok, token} ->
+          start_lane(channel, open_opts, pid, token, request)
       end
     end
 
     defp on_lane(reply, _pid, _request, _opts), do: reply
+
+    defp start_lane(channel, open_opts, pid, token, request) do
+      case GenServer.start(__MODULE__, {channel, Map.put(open_opts, :lane?, true)}) do
+        {:ok, lane} ->
+          try do
+            timeout =
+              Map.get(open_opts, :await_timeout, @default_await_timeout) +
+                @await_up_call_margin_ms
+
+            with :ok <- HTTP1Lanes.attach(pid, token, lane),
+                 :ok <- GenServer.call(lane, :await_up, timeout),
+                 {:ok, response} <- Adapter.call(lane, request) do
+              {:ok, Map.put(response, :conn_pid, lane)}
+            else
+              {:error, _reason} = error ->
+                stop_lane(lane)
+                error
+            end
+          catch
+            :exit, reason ->
+              stop_lane(lane)
+              :erlang.raise(:exit, reason, __STACKTRACE__)
+          end
+
+        {:error, reason} ->
+          HTTP1Lanes.release(pid, token)
+          {:error, reason}
+      end
+    end
 
     defp acquire_lane(pid, request, opts) do
       deadline = elem(request, tuple_size(request) - 1)
@@ -285,7 +296,9 @@ if Code.ensure_loaded?(:gun) do
 
     @impl GenServer
     def handle_cast({:reserve_lane, caller, tag}, state),
-      do: {:noreply, %{state | lanes: HTTP1Lanes.reserve(state.lanes, caller, tag)}}
+      do:
+        {:noreply,
+         %{state | lanes: HTTP1Lanes.reserve(state.lanes, caller, tag, main_idle?(state))}}
 
     def handle_cast({:release_lane, token}, state),
       do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, token)}}
@@ -546,7 +559,23 @@ if Code.ensure_loaded?(:gun) do
           else: reply
         )
 
+    # The connection of the channel has no call: a call that waits for a connection of
+    # the channel takes it.
+    defp lane_done({:noreply, state}), do: {:noreply, main_idle(state)}
+    defp lane_done({:reply, response, state}), do: {:reply, response, main_idle(state)}
+    defp lane_done({:stop, _reason, _state} = reply), do: reply
     defp lane_done(reply), do: reply
+
+    defp main_idle?(%{http1?: true, lane?: false} = state),
+      do: map_size(state.response_processes) == 0
+
+    defp main_idle?(_state), do: false
+
+    defp main_idle(state) do
+      if main_idle?(state),
+        do: %{state | lanes: HTTP1Lanes.main_idle(state.lanes)},
+        else: state
+    end
 
     defp ensure_gun(%{gun_pid: nil} = state) do
       case open(state.channel.host, state.channel.port, state.gun_open_opts) do

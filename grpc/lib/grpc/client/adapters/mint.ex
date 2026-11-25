@@ -75,7 +75,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
         HTTP/1.1 carries one call at a time on a connection, so a call that finds the channel's
         connection busy opens another one for itself, up to this limit. Calls over it wait for a
         connection to free, for at most 5 seconds or until their own deadline or cancel, and fail with
-        `UNAVAILABLE` (or `DEADLINE_EXCEEDED`, `CANCELLED`). An integer of 2 or more. HTTP/2 ignores it.
+        `UNAVAILABLE` (or `DEADLINE_EXCEEDED`, `CANCELLED`). A positive integer, where `1` makes the calls take the one connection in turn. HTTP/2 ignores it.
       * `:protocols`: for `protocol: :connect` and `protocol: :grpc_web`, a non-empty list of the HTTP
         versions to allow, from `:http1` and `:http2`. With `https://` the version is negotiated with
         ALPN, and the default allows both. With `http://` there is no negotiation: the adapter speaks

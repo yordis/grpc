@@ -31,7 +31,7 @@ if Code.ensure_loaded?(:gun) do
         finds the channel's connection busy opens another one for itself, up to this limit.
         Calls over it wait for a connection to free, for at most
         5 seconds or until their own deadline or cancel, and fail with `UNAVAILABLE`
-        (or `DEADLINE_EXCEEDED`, `CANCELLED`). An integer of 2 or more. HTTP/2 ignores it.
+        (or `DEADLINE_EXCEEDED`, `CANCELLED`). A positive integer, where `1` makes the calls take the one connection in turn. HTTP/2 ignores it.
 
       * `:response_window` - bytes of a response the adapter reads ahead of the
         caller, per stream (default: `1_048_576`). The least value is `16_384`, one

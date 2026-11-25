@@ -31,11 +31,11 @@ defmodule GRPC.Client.HTTP1Lanes do
       :error ->
         :ok
 
-      {:ok, value} when is_integer(value) and value >= 2 ->
+      {:ok, value} when is_integer(value) and value >= 1 ->
         :ok
 
       {:ok, value} ->
-        {:error, ":http1_max_connections must be an integer of 2 or more, got: #{inspect(value)}"}
+        {:error, ":http1_max_connections must be a positive integer, got: #{inspect(value)}"}
     end
   end
 
@@ -63,6 +63,11 @@ defmodule GRPC.Client.HTTP1Lanes do
           {^tag, {:ok, _token} = reply} ->
             Process.demonitor(monitor, [:flush])
             reply
+
+          # The connection of the channel is free: the call goes to it, not to a lane.
+          {^tag, :retry} ->
+            Process.demonitor(monitor, [:flush])
+            :retry
 
           {:DOWN, ^monitor, :process, _pid, reason} ->
             exit(
@@ -138,19 +143,48 @@ defmodule GRPC.Client.HTTP1Lanes do
 
   ## Connection process side
 
-  def new(max_connections) when is_integer(max_connections) and max_connections >= 2,
+  def new(max_connections) when is_integer(max_connections) and max_connections >= 1,
     do: %__MODULE__{max: max_connections - 1}
 
   def member?(%__MODULE__{monitors: monitors}, ref), do: Map.has_key?(monitors, ref)
 
-  @doc "Handles `{:reserve_lane, caller, tag}`: answers the caller now, or holds it."
-  def reserve(%__MODULE__{} = lanes, caller, tag) do
-    if map_size(lanes.monitors) < lanes.max do
-      grant(lanes, caller, tag)
-    else
-      %{lanes | waiting: :queue.in({caller, tag}, lanes.waiting)}
+  @doc """
+  Handles `{:reserve_lane, caller, tag}`: answers the caller now, or holds it. A caller
+  that finds the connection of the channel free is told to use it (`:retry`).
+  """
+  def reserve(%__MODULE__{} = lanes, caller, tag, main_idle?) do
+    cond do
+      main_idle? ->
+        send(caller, {tag, :retry})
+        lanes
+
+      map_size(lanes.monitors) < lanes.max ->
+        grant(lanes, caller, tag)
+
+      true ->
+        %{lanes | waiting: :queue.in({caller, tag}, lanes.waiting)}
     end
   end
+
+  @doc "The connection of the channel has no call: the first waiting call is told to use it."
+  def main_idle(%__MODULE__{} = lanes) do
+    case :queue.out(lanes.waiting) do
+      {:empty, _queue} ->
+        lanes
+
+      {{:value, {caller, tag}}, waiting} ->
+        lanes = %{lanes | waiting: waiting}
+
+        if alive?(caller) do
+          send(caller, {tag, :retry})
+          lanes
+        else
+          main_idle(lanes)
+        end
+    end
+  end
+
+  defp alive?(pid), do: node(pid) != node() or Process.alive?(pid)
 
   @doc "Handles `{:give_up, tag}`: drops the call from the queue, or frees the slot it was given."
   def give_up(%__MODULE__{} = lanes, tag) do

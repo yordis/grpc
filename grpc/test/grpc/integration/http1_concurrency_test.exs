@@ -204,6 +204,58 @@ defmodule GRPC.Integration.Http1ConcurrencyTest do
         end)
       end
 
+      test "with :http1_max_connections 1 the calls take the connection in turn", %{
+        connect_opts: connect_opts
+      } do
+        start_supervised!(Gauge)
+
+        run_server([HelloServer, RouteServer], fn port ->
+          channel = connect(port, connect_opts, http1_max_connections: 1)
+
+          results =
+            1..3
+            |> Enum.map(fn _ ->
+              Task.async(fn -> hello(channel, "gauge", timeout: 10_000) end)
+            end)
+            |> Task.await_many(15_000)
+
+          for result <- results,
+              do: assert({:ok, %Helloworld.HelloReply{message: "Hello, gauge"}} = result)
+
+          assert {0, 1} = Gauge.read()
+        end)
+      end
+
+      test "with :http1_max_connections 1 a waiting call honors its deadline and cancel", %{
+        connect_opts: connect_opts
+      } do
+        run_server([HelloServer, RouteServer], fn port ->
+          channel = connect(port, connect_opts, http1_max_connections: 1)
+          handle = GRPC.Stub.new_cancel_handle()
+          hung = Task.async(fn -> hello(channel, "hang", cancel: handle, timeout: 8_000) end)
+          Process.sleep(300)
+
+          {micros, result} = :timer.tc(fn -> hello(channel, "after", timeout: 300) end)
+          assert {:error, %RPCError{status: @deadline_exceeded}} = result
+          assert micros < 1_500_000
+
+          queued_handle = GRPC.Stub.new_cancel_handle()
+
+          queued =
+            Task.async(fn -> hello(channel, "after", cancel: queued_handle, timeout: 8_000) end)
+
+          Process.sleep(200)
+          assert :ok = GRPC.Stub.cancel(queued_handle)
+          assert {:error, %RPCError{status: @cancelled}} = Task.await(queued, 1_000)
+
+          assert :ok = GRPC.Stub.cancel(handle)
+          assert {:error, %RPCError{status: @cancelled}} = Task.await(hung, 5_000)
+
+          assert {:ok, %Helloworld.HelloReply{message: "Hello, after"}} =
+                   hello(channel, "after", timeout: 3_000)
+        end)
+      end
+
       test "opens at most :http1_max_connections connections", %{connect_opts: connect_opts} do
         start_supervised!(Gauge)
 

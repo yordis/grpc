@@ -342,9 +342,7 @@ defmodule GRPC.Server.Adapters.Cowboy do
     stream_window = Map.get(opts, :initial_stream_window_size, @default_stream_window)
     window = min(@connection_window_streams * stream_window, @max_window)
 
-    opts
-    |> Map.put_new(:initial_connection_window_size, window)
-    |> Map.put_new(:connection_window_margin_size, window)
+    Map.put_new(opts, :initial_connection_window_size, window)
   end
 
   defp socket_opts(port, opts) do

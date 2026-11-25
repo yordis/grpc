@@ -43,13 +43,13 @@ defmodule GRPC.Server.StreamTotalBodyTest do
     end
   end
 
-  # Sends `count` messages as a client-streaming call and returns the grpc-status.
-  defp record_route_status(port, count) do
+  # Sends `count` messages as a streaming call and returns the grpc-status.
+  defp record_route_status(port, count, method \\ "RecordRoute") do
     {:ok, conn} = :gun.open(~c"localhost", port, %{protocols: [:http2]})
     {:ok, :http2} = :gun.await_up(conn, 5_000)
 
     ref =
-      :gun.post(conn, "/routeguide.RouteGuide/RecordRoute", [
+      :gun.post(conn, "/routeguide.RouteGuide/" <> method, [
         {"content-type", "application/grpc+proto"},
         {"te", "trailers"}
       ])
@@ -85,6 +85,14 @@ defmodule GRPC.Server.StreamTotalBodyTest do
 
     run_server([], fn port ->
       assert "0" = record_route_status(port, count)
+    end)
+  end
+
+  test "a bidirectional stream of small messages totalling over 4 MiB is accepted by default" do
+    count = div(@four_mib, byte_size(frame())) * 2
+
+    run_server([], fn port ->
+      assert "0" = record_route_status(port, count, "RouteChat")
     end)
   end
 

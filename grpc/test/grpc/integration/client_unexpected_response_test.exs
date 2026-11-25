@@ -143,6 +143,22 @@ defmodule GRPC.Integration.ClientUnexpectedResponseTest do
         assert {:error, %GRPC.RPCError{status: @unknown}} =
                  adapter |> then(&connect(port, &1)) |> unary()
       end
+
+      test "a call without a timeout whose reply is not application/grpc and has no body is unknown",
+           %{adapter: adapter} do
+        port =
+          ScriptedH2Server.start([
+            {:headers, [{":status", "200"}, {"content-type", "image/jpeg"}, {"vary", "Origin"}]},
+            {:data, <<>>, :fin}
+          ])
+
+        assert {:error, %GRPC.RPCError{status: @unknown}} =
+                 adapter
+                 |> then(&connect(port, &1))
+                 |> Helloworld.Greeter.Stub.say_hello(%Helloworld.HelloRequest{name: "x"},
+                   timeout: :infinity
+                 )
+      end
     end
   end
 end

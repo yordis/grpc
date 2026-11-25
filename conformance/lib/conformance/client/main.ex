@@ -14,7 +14,6 @@ defmodule Conformance.Client.Main do
   def run(adapter) do
     # Treat stdin/stdout as raw bytes: the default device re-encodes as UTF-8.
     :ok = :io.setopts(:standard_io, [:binary, encoding: :latin1])
-    {:ok, _} = Conformance.Client.Gate.start_link()
     {:ok, out} = Agent.start_link(fn -> nil end)
 
     loop(adapter, out, 0)

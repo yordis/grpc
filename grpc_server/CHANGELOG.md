@@ -12,6 +12,8 @@
 
 ### Bug Fixes
 
+  * The default `:max_body_size` (4 MiB) no longer cuts off a long-lived client-streaming or bidirectional call once its messages add up to 4 MiB. The default applies only to a call whose request is one body (unary and server streaming, over gRPC, gRPC-Web, Connect and transcoding). A request stream is bounded per message by `:max_message_length`. An explicit `:max_body_size` still caps the total of a request stream. Upgrade note: if you set `:max_body_size` only to cap a stream's total, it still does; if you relied on the unreleased default to cap streams, set `:max_body_size` explicitly.
+
   * The 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. A server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size` (a behavior change).
 
   * A server stream no longer hangs when two calls on one connection fill Cowboy's send buffers. If a stream waited for its stream buffer to drain and the connection buffer then filled, the second alarm made the stream forget it was waiting. When the buffers drained it got no ack, and the call never ended, however fast the client read (#652).

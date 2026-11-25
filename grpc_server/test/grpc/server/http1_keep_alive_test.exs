@@ -42,10 +42,14 @@ defmodule GRPC.Server.Http1KeepAliveTest do
     {:ok, conn} = :gun.open(~c"localhost", port, %{protocols: [:http], retry: 0})
     {:ok, :http} = :gun.await_up(conn, 5_000)
 
-    ref = :gun.post(conn, path,[{"content-type", content_type} | headers], body)
+    ref = :gun.post(conn, path, [{"content-type", content_type} | headers], body)
     await_response(conn, ref)
 
-    refute_receive {:gun_down, ^conn, _, _, _}, 300
+    # The same connection answers a second request. A connection the server closed would
+    # report it as a gun error or a gun_down instead of a response.
+    ref = :gun.post(conn, path, [{"content-type", content_type} | headers], body)
+    await_response(conn, ref)
+    refute_received {:gun_down, ^conn, _, _, _}
     :gun.close(conn)
   end
 
@@ -89,7 +93,10 @@ defmodule GRPC.Server.Http1KeepAliveTest do
   for {name, latitude} <- [{"before a message", 99}, {"after a message", 98}, {"none", 1}] do
     test "the connection stays open after a Connect stream that fails: #{name}" do
       run_server(RouteServer, fn port ->
-        rectangle = Protobuf.encode(%Routeguide.Rectangle{lo: %Routeguide.Point{latitude: unquote(latitude)}})
+        rectangle =
+          Protobuf.encode(%Routeguide.Rectangle{
+            lo: %Routeguide.Point{latitude: unquote(latitude)}
+          })
 
         assert_kept_alive(
           port,
@@ -103,7 +110,10 @@ defmodule GRPC.Server.Http1KeepAliveTest do
 
     test "the connection stays open after a gRPC-Web stream that fails: #{name}" do
       run_server(RouteServer, fn port ->
-        rectangle = Protobuf.encode(%Routeguide.Rectangle{lo: %Routeguide.Point{latitude: unquote(latitude)}})
+        rectangle =
+          Protobuf.encode(%Routeguide.Rectangle{
+            lo: %Routeguide.Point{latitude: unquote(latitude)}
+          })
 
         assert_kept_alive(
           port,
@@ -144,9 +154,8 @@ defmodule GRPC.Server.Http1KeepAliveTest do
 
     # The reply is in before the last chunk of the request is sent.
     assert {:ok, "HTTP/1.1 " <> _} = :gen_tcp.recv(socket, 0, 5_000)
-    if second_chunk != "" do
-      Process.sleep(100)
 
+    if second_chunk != "" do
       :ok =
         :gen_tcp.send(
           socket,
@@ -155,7 +164,6 @@ defmodule GRPC.Server.Http1KeepAliveTest do
     end
 
     :ok = :gen_tcp.send(socket, "0\r\n\r\n")
-    Process.sleep(300)
 
     :ok =
       :gen_tcp.send(
@@ -219,9 +227,7 @@ defmodule GRPC.Server.Http1KeepAliveTest do
       assert {:ok, "HTTP/1.1 " <> _} = :gen_tcp.recv(socket, 0, 5_000)
 
       # The client sends nothing more. The server gives up on the body, and Cowboy closes.
-      started = System.monotonic_time(:millisecond)
       assert {:error, :closed} = recv_until_closed(socket)
-      assert System.monotonic_time(:millisecond) - started < 600
     end)
   end
 

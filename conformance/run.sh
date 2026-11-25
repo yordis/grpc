@@ -10,7 +10,6 @@
 #   KNOWN_FAILING   file of test cases expected to fail. Defaults to config/<name>.known_failing.txt
 #                   (config/client.<adapter>.known_failing.txt for the client) when it exists.
 #                   Set it to an empty string to run without a list.
-#   KNOWN_FLAKY     same, for cases allowed to fail (<name>.known_flaky.txt).
 set -e
 here="$(cd "$(dirname "$0")" && pwd)"
 case "${1:-}" in
@@ -38,10 +37,8 @@ case "$name" in
     ;;
 esac
 [ -f "$here/config/$list.known_failing.txt" ] && : "${KNOWN_FAILING=$here/config/$list.known_failing.txt}"
-[ -f "$here/config/$list.known_flaky.txt" ] && : "${KNOWN_FLAKY=$here/config/$list.known_flaky.txt}"
 
 extra=""
 [ -n "${KNOWN_FAILING:-}" ] && extra="--known-failing @$KNOWN_FAILING"
-[ -n "${KNOWN_FLAKY:-}" ] && extra="$extra --known-flaky @$KNOWN_FLAKY"
 # shellcheck disable=SC2086
 exec "$runner" --conf "$config" --mode "$mode" $extra "$@" -- $program

@@ -255,7 +255,12 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   end
 
   def handle_call({:consume_response, :cancel}, _from, state) do
-    {:reply, :ok, %{state | terminated: true, done: true}, {:continue, :produce_response}}
+    canceled =
+      {:error, GRPC.RPCError.exception(GRPC.Status.cancelled(), "Canceled by the client")}
+
+    {:reply, :ok,
+     %{state | responses: :queue.in(canceled, state.responses), terminated: true, done: true},
+     {:continue, :produce_response}}
   end
 
   def handle_call({:consume_response, :done}, _from, state) do

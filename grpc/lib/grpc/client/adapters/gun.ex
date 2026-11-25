@@ -460,6 +460,9 @@ if Code.ensure_loaded?(:gun) do
         {:error, :timeout} ->
           deadline_exceeded()
 
+        {:error, :canceled} ->
+          {:error, GRPC.RPCError.exception(GRPC.Status.cancelled(), "Canceled by the client")}
+
         # Connection-level failures are UNAVAILABLE per the gRPC status spec:
         # the RPC never completed on a live connection, so callers can safely
         # retry (deadline errors above stay DEADLINE_EXCEEDED).

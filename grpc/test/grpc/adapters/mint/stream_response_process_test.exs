@@ -507,9 +507,13 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
       stream = StreamResponseProcess.build_stream(pid, true, :timer.seconds(5))
 
       StreamResponseProcess.consume(pid, :data, data)
-      StreamResponseProcess.cancel(pid)
+      StreamResponseProcess.consume(pid, :trailers, [{"grpc-status", "0"}])
+      StreamResponseProcess.done(pid)
 
-      assert Enum.to_list(stream) == [ok: build(:hello_reply_rpc)]
+      assert Enum.to_list(stream) == [
+               ok: build(:hello_reply_rpc),
+               trailers: %{"grpc-status" => "0"}
+             ]
     end
   end
 end

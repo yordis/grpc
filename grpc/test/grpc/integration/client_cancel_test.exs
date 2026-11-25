@@ -1,5 +1,5 @@
 defmodule GRPC.Integration.ClientCancelTest do
-  use GRPC.Integration.TestCase, async: true
+  use GRPC.Integration.TestCase, async: false
 
   alias GRPC.Client.Adapters.{Gun, Mint}
 

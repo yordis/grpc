@@ -299,7 +299,7 @@ defmodule GRPC.Client.Connect.Response do
              )}
 
           compressor ->
-            {:ok, compressor.decompress(body)}
+            GRPC.Client.Decompress.run(compressor, body)
         end
     end
   end

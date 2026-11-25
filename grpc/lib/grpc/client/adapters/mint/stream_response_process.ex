@@ -390,7 +390,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # are returned as `{remaining_buffer, updated_queue}`. A message over the size
   # limit ends the pass with `{:error, error, updated_queue}`.
   defp drain_buffer(buffer, compressor, codec, res_mod, responses_queue, limit) do
-    case get_message(buffer, compressor, limit) do
+    case GRPC.Client.Decompress.get_message(buffer, compressor, limit) do
       {:error, error} ->
         {:error, error, responses_queue}
 
@@ -414,26 +414,6 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       _ ->
         {buffer, responses_queue}
     end
-  end
-
-  # The prefix is checked here, as newer `GRPC.Message.get_message/2` does, and
-  # that function raises for a message over `:max_message_length` or a gzip bomb.
-  defp get_message(buffer, compressor, limit) do
-    with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer, limit) do
-      case GRPC.Message.get_message(buffer, compressor, max_message_length: limit) do
-        {{1, _message}, _rest} when is_nil(compressor) ->
-          {:error,
-           GRPC.RPCError.exception(
-             status: :internal,
-             message: "Compressed flag is set, but not specified in headers."
-           )}
-
-        other ->
-          other
-      end
-    end
-  rescue
-    error in GRPC.RPCError -> {:error, error}
   end
 
   defp get_headers_response(headers, type, response_headers) do

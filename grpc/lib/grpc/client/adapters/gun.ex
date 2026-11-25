@@ -936,7 +936,11 @@ if Code.ensure_loaded?(:gun) do
              ended: ended
            } = stream
          ) do
-      case get_message(buffer, compressor, stream.stream.max_receive_message_length) do
+      case GRPC.Client.Decompress.get_message(
+             buffer,
+             compressor,
+             stream.stream.max_receive_message_length
+           ) do
         {:error, _} = error ->
           # The rest of the message is not read: reset the stream.
           cancel(stream.stream)
@@ -983,32 +987,6 @@ if Code.ensure_loaded?(:gun) do
         GRPC.Status.internal(),
         "The response ended in the middle of a message."
       )
-    end
-
-    # A message over `:max_message_length` ends the stream with an error item.
-    # The prefix is checked here, as newer `GRPC.Message.get_message/1` does, and
-    # that function raises for it.
-    defp get_message(buffer, compressor, limit) do
-      with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer, limit) do
-        case GRPC.Message.get_message(buffer, compressor, max_message_length: limit) do
-          {{1, _message}, _rest} when is_nil(compressor) ->
-            {:error,
-             GRPC.RPCError.exception(
-               status: :internal,
-               message: "Compressed flag is set, but not specified in headers."
-             )}
-
-          other ->
-            other
-        end
-      end
-    rescue
-      error in GRPC.RPCError ->
-        {:error, error}
-
-      _ ->
-        {:error,
-         GRPC.RPCError.exception(status: :internal, message: "Message could not be decompressed.")}
     end
 
     defp cancel_reset?({:stream_error, :cancel, _}), do: true

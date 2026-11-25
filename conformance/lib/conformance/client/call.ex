@@ -122,22 +122,25 @@ defmodule Conformance.Client.Call do
     |> put_cred(req)
   end
 
-  # The gRPC protocol is the default of the library. Connect is chosen per channel,
-  # together with the HTTP versions the case allows.
+  # The gRPC protocol is the default of the library. Connect and gRPC-Web are chosen per
+  # channel, together with the HTTP versions the case allows.
   defp put_protocol(opts, %{protocol: :PROTOCOL_CONNECT} = req) do
-    protocols =
-      case req.http_version do
-        :HTTP_VERSION_1 -> [:http1]
-        :HTTP_VERSION_2 -> [:http2]
-        _ -> [:http1, :http2]
-      end
-
     opts
     |> Keyword.put(:protocol, :connect)
-    |> Keyword.put(:adapter_opts, protocols: protocols)
+    |> Keyword.put(:adapter_opts, protocols: http_protocols(req.http_version))
+  end
+
+  defp put_protocol(opts, %{protocol: :PROTOCOL_GRPC_WEB} = req) do
+    opts
+    |> Keyword.put(:protocol, :grpc_web)
+    |> Keyword.put(:adapter_opts, protocols: http_protocols(req.http_version))
   end
 
   defp put_protocol(opts, _req), do: opts
+
+  defp http_protocols(:HTTP_VERSION_1), do: [:http1]
+  defp http_protocols(:HTTP_VERSION_2), do: [:http2]
+  defp http_protocols(_), do: [:http1, :http2]
 
   defp codec(:CODEC_JSON), do: GRPC.Codec.JSON
   defp codec(_), do: GRPC.Codec.Proto

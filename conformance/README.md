@@ -42,6 +42,12 @@ Client mode, Connect protocol with the Mint adapter (1764 cases):
 CLIENT_ADAPTER=mint conformance/run.sh config/client.connect.yaml
 ```
 
+Client mode, gRPC-Web protocol with the Mint adapter (2046 cases):
+
+```sh
+CLIENT_ADAPTER=mint conformance/run.sh config/client.grpcweb.yaml
+```
+
 Narrower server configs run a slice of `full.yaml`: `config/grpc.yaml` for gRPC and gRPC-Web
 only, `config/connect.yaml` for Connect only.
 
@@ -88,6 +94,7 @@ as a full segment, so partial wildcards such as `Protocol:*` do not match.
 | `config/connect.yaml` | server | the Connect part of `full.yaml` |
 | `config/client.yaml` | client | gRPC over HTTP/2 with the Mint or Gun adapter, proto and JSON, identity and gzip, every stream type, TLS and client certificates, message receive limit |
 | `config/client.connect.yaml` | client | the Connect protocol (`protocol: :connect`) with the Mint adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, GET, timeouts, cancellation, message receive limit |
+| `config/client.grpcweb.yaml` | client | the gRPC-Web protocol (`protocol: :grpc_web`) with the Mint adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, trailers, timeouts, cancellation, message receive limit |
 
 Left off on purpose: HTTP/1.1 and gRPC-Web in `client.yaml` (the client speaks gRPC over HTTP/2 only), and half-duplex
 bidirectional streaming over HTTP/1.1 for the client.
@@ -102,6 +109,7 @@ Measured with the committed, empty known-failing lists:
 | Client, `config/client.yaml`, Mint | 1052 | 0 | 1052 |
 | Client, `config/client.yaml`, Gun | 1052 | 0 | 1052 |
 | Client, `config/client.connect.yaml`, Mint | 1764 | 0 | 1764 |
+| Client, `config/client.grpcweb.yaml`, Mint | 2046 | 0 | 2046 |
 
 When a regression or a new feature adds failures, add them to the matching list as grouped
 globs with the root cause written above each group, and remove them as the fixes land.

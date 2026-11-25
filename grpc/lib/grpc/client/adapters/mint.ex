@@ -274,12 +274,14 @@ if Code.ensure_loaded?(Mint.HTTP) do
       ]
     end
 
-    # The gRPC protocol runs on HTTP/2 only. Connect runs on either version.
-    defp put_protocols(opts, %Channel{protocol: :connect}, protocols) when is_list(protocols),
-      do: Keyword.put(opts, :protocols, protocols)
+    # The gRPC protocol runs on HTTP/2 only. Connect and gRPC-Web run on either version.
+    defp put_protocols(opts, %Channel{protocol: protocol}, protocols)
+         when protocol in [:connect, :grpc_web] and is_list(protocols),
+         do: Keyword.put(opts, :protocols, protocols)
 
-    defp put_protocols(opts, %Channel{protocol: :connect}, _protocols),
-      do: Keyword.put(opts, :protocols, [:http1, :http2])
+    defp put_protocols(opts, %Channel{protocol: protocol}, _protocols)
+         when protocol in [:connect, :grpc_web],
+         do: Keyword.put(opts, :protocols, [:http1, :http2])
 
     defp put_protocols(opts, _channel, _protocols), do: opts
 
@@ -590,6 +592,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp request_headers(%{channel: %{protocol: :connect}} = stream, opts, method),
       do: Connect.request_headers(stream, opts, method)
+
+    defp request_headers(%{channel: %{protocol: :grpc_web}} = stream, opts, _method),
+      do: GRPC.Client.GrpcWeb.request_headers(stream, opts)
 
     defp request_headers(stream, opts, _method),
       do: GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)

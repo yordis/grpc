@@ -168,10 +168,11 @@ defmodule GRPC.Integration.ClientUnexpectedResponseTest do
             {:data, frame(%Helloworld.HelloReply{message: "hi"}), :fin}
           ])
 
-        assert {:error, %GRPC.RPCError{status: status}} =
+        assert {:error, %GRPC.RPCError{status: status, headers: headers}} =
                  adapter |> then(&connect(port, &1)) |> unary()
 
         assert status in [@internal, @unknown]
+        assert is_map(headers)
       end
 
       test "a grpc-status in the headers is ignored when the trailers have another",

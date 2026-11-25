@@ -284,7 +284,10 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
     case get_headers_response(headers, :headers, nil) do
       {:error, _error} = error ->
         state = update_compressor({:headers, headers}, state)
-        state |> Map.put(:pending_status, error) |> Map.put(:headers, headers)
+
+        state
+        |> Map.put(:pending_status, error)
+        |> Map.put(:headers, GRPC.Transport.HTTP2.decode_headers(headers))
 
       _response ->
         do_consume_headers(:headers, headers, state)

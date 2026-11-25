@@ -56,8 +56,9 @@ jobs:
         env:
           CLIENT_ADAPTER: ${{ matrix.adapter }}
         run: |
-          mkdir -p conformance/logs
-          conformance/run.sh ${{ matrix.config }} 2>&1 | tee conformance/logs/${{ matrix.log }}.log
+          mkdir -p logs
+          ./run.sh ${{ matrix.config }} 2>&1 | tee logs/${{ matrix.log }}.log
+        working-directory: ./conformance
       - name: Upload runner logs
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4

@@ -29,8 +29,12 @@ defmodule GRPC.Integration.ConnectClientStreamTest do
     end
 
     def route_chat(req_enum, stream) do
-      Enum.each(req_enum, fn note ->
-        Server.send_reply(stream, %{note | message: "Reply: #{note.message}"})
+      Enum.each(req_enum, fn
+        %{message: "fail"} ->
+          raise GRPC.RPCError, status: :not_found, message: "no chat"
+
+        note ->
+          Server.send_reply(stream, %{note | message: "Reply: #{note.message}"})
       end)
     end
 
@@ -159,6 +163,36 @@ defmodule GRPC.Integration.ConnectClientStreamTest do
         assert [{:ok, %{message: "Reply: Message 1"}}] = Enum.take(replies, 1)
 
         GRPC.Stub.send_request(stream, note(2), end_stream: true)
+      end)
+    end
+
+    test "a bidi stream the server ends with an error before any reply, read in steps with #{inspect(adapter)}" do
+      run_server(FeatureServer, fn port ->
+        channel = connect(port, unquote(adapter), adapter_opts: [protocols: [:http2]])
+
+        stream = Routeguide.RouteGuide.Stub.route_chat(channel, return_headers: true)
+        GRPC.Stub.send_request(stream, %Routeguide.RouteNote{message: "fail"})
+
+        assert {:ok, replies, %{headers: _}} = GRPC.Stub.recv(stream, return_headers: true)
+        assert [{:trailers, _}] = Enum.take(replies, 1)
+        assert [{:error, %GRPC.RPCError{status: 5}}] = Enum.take(replies, 1)
+      end)
+    end
+
+    test "the replies of a bidi stream are read in steps with #{inspect(adapter)}" do
+      run_server(FeatureServer, fn port ->
+        channel = connect(port, unquote(adapter), adapter_opts: [protocols: [:http2]])
+
+        stream = Routeguide.RouteGuide.Stub.route_chat(channel)
+        GRPC.Stub.send_request(stream, note(1))
+
+        assert {:ok, replies} = GRPC.Stub.recv(stream)
+        assert [{:ok, %{message: "Reply: Message 1"}}] = Enum.take(replies, 1)
+
+        GRPC.Stub.send_request(stream, note(2), end_stream: true)
+
+        assert [{:ok, %{message: "Reply: Message 2"}}] = Enum.take(replies, 1)
+        assert [] = Enum.to_list(replies)
       end)
     end
   end

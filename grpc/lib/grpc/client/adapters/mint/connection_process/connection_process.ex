@@ -147,16 +147,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
       {:stop, :normal, State.update_conn(state, conn)}
     end
 
-    def handle_call(_request, _from, %{conn: %Mint.HTTP2{state: :closed}} = state) do
+    def handle_call(_request, _from, %{conn: %{state: :closed}} = state) do
       {:reply, {:error, @connection_closed_error}, state}
     end
 
     def handle_call(
-          {:request, method, path, headers, :stream, opts},
+          {:request, method, path, headers, stream_or_nil, opts},
           _from,
           state
-        ) do
-      case Mint.HTTP.request(state.conn, method, path, headers, :stream) do
+        )
+        when stream_or_nil in [:stream, nil] do
+      case Mint.HTTP.request(state.conn, method, path, headers, stream_or_nil) do
         {:ok, conn, request_ref} ->
           stream_response_pid = opts[:stream_response_pid]
           monitor_ref = if is_pid(stream_response_pid), do: Process.monitor(stream_response_pid)
@@ -164,7 +165,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
           new_state =
             state
             |> State.update_conn(conn)
-            |> State.put_empty_ref_state(request_ref, stream_response_pid, monitor_ref)
+            |> State.put_empty_ref_state(
+              request_ref,
+              stream_response_pid,
+              monitor_ref,
+              opts[:protocol]
+            )
 
           emit_streams(new_state)
           {:reply, {:ok, %{request_ref: request_ref}}, new_state}
@@ -190,7 +196,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
             state
             |> State.update_conn(conn)
             |> State.update_request_stream_queue(queue)
-            |> State.put_empty_ref_state(request_ref, stream_response_pid, monitor_ref)
+            |> State.put_empty_ref_state(
+              request_ref,
+              stream_response_pid,
+              monitor_ref,
+              opts[:protocol]
+            )
 
           emit_streams(new_state)
 
@@ -239,9 +250,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       state = drop_request(state, request_ref)
 
-      case Mint.HTTP2.cancel_request(state.conn, request_ref) do
-        {:ok, conn} -> {:reply, :ok, State.update_conn(state, conn)}
-        {:error, conn, error} -> {:reply, {:error, error}, State.update_conn(state, conn)}
+      case reset_request(state, request_ref) do
+        %{conn: %Mint.HTTP1{}} = state ->
+          {:reply, :ok, state, {:continue, :check_connection_status}}
+
+        state ->
+          {:reply, :ok, state}
       end
     end
 
@@ -289,7 +303,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
                 state
 
               _ ->
-                Enum.reduce(responses, state, &process_response/2)
+                Enum.reduce(responses, state, &route_response/2)
             end
 
           state = observe_settings(state)
@@ -343,7 +357,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp schedule_keepalive(state), do: state
 
-    defp handle_keepalive(%{conn: %Mint.HTTP2{state: :closed}} = state), do: {:noreply, state}
+    defp handle_keepalive(%{conn: %{state: :closed}} = state), do: {:noreply, state}
+
+    defp handle_keepalive(%{conn: %Mint.HTTP1{}} = state), do: {:noreply, state}
 
     defp handle_keepalive(%{pings_unacked: unacked, keepalive_tolerance: tolerance} = state)
          when is_integer(tolerance) and unacked >= tolerance do
@@ -382,6 +398,36 @@ if Code.ensure_loaded?(Mint.HTTP) do
       pongs = Enum.count(responses, &match?({:pong, _ref}, &1))
       %{state | pings_unacked: state.pings_unacked - pongs}
     end
+
+    # A Connect response is handed to its response process as it comes: it decides what the
+    # status and the headers mean.
+    defp route_response(response, state) do
+      ref = elem(response, 1)
+
+      if State.has_request_ref(state, ref) and State.connect?(state, ref) do
+        process_connect_response(response, state)
+      else
+        process_response(response, state)
+      end
+    end
+
+    defp process_connect_response({:status, request_ref, status}, state),
+      do: consume_or_cancel_stream(state, request_ref, :status, status)
+
+    defp process_connect_response({:headers, request_ref, headers}, state) do
+      if State.empty_headers?(state, request_ref) do
+        state
+        |> State.update_response_headers(request_ref, headers)
+        |> consume_or_cancel_stream(request_ref, :headers, headers)
+      else
+        consume_or_cancel_stream(state, request_ref, :trailers, headers)
+      end
+    end
+
+    defp process_connect_response({:data, request_ref, data}, state),
+      do: consume_or_cancel_stream(state, request_ref, :data, data)
+
+    defp process_connect_response(response, state), do: process_response(response, state)
 
     # Frames may still arrive for a stream whose state was already dropped
     # (e.g. cancelled after its response process died mid-batch). Ignore them
@@ -467,10 +513,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     defp cancel_refused_stream(state, request_ref) do
       state = drop_request(state, request_ref)
 
-      case Mint.HTTP2.cancel_request(state.conn, request_ref) do
-        {:ok, conn} -> State.update_conn(state, conn)
-        {:error, conn, _error} -> State.update_conn(state, conn)
-      end
+      reset_request(state, request_ref)
     end
 
     defp cancel_dead_stream(state, request_ref, pid, reason) do
@@ -486,10 +529,21 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       state = drop_request(state, request_ref)
 
+      reset_request(state, request_ref)
+    end
+
+    # HTTP/2 resets the stream. HTTP/1 has no way to abandon one request, the
+    # connection is closed instead.
+    defp reset_request(%{conn: %Mint.HTTP2{}} = state, request_ref) do
       case Mint.HTTP2.cancel_request(state.conn, request_ref) do
         {:ok, conn} -> State.update_conn(state, conn)
         {:error, conn, _error} -> State.update_conn(state, conn)
       end
+    end
+
+    defp reset_request(state, _request_ref) do
+      {:ok, conn} = Mint.HTTP.close(state.conn)
+      State.update_conn(state, conn)
     end
 
     defp drop_request(state, request_ref) do
@@ -589,10 +643,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       state = drop_request(state, request_ref)
 
-      case Mint.HTTP2.cancel_request(state.conn, request_ref) do
-        {:ok, conn} -> State.update_conn(state, conn)
-        {:error, conn, _error} -> State.update_conn(state, conn)
-      end
+      reset_request(state, request_ref)
     end
 
     defp stream_body(conn, request_ref, body, true = _stream_eof?) do
@@ -621,12 +672,15 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
-    def get_window_size(conn, ref) do
+    def get_window_size(%Mint.HTTP2{} = conn, ref) do
       min(
         Mint.HTTP2.get_window_size(conn, {:request, ref}),
         Mint.HTTP2.get_window_size(conn, :connection)
       )
     end
+
+    # HTTP/1 has no flow control.
+    def get_window_size(_conn, _ref), do: 1_073_741_824
 
     defp finish_all_pending_requests(state, reason) do
       count = map_size(state.requests)
@@ -809,7 +863,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp notify_draining(state), do: state
 
-    defp observe_settings(state) do
+    defp observe_settings(%{conn: %Mint.HTTP2{}} = state) do
       max =
         normalize_max_streams(Mint.HTTP2.get_server_setting(state.conn, :max_concurrent_streams))
 
@@ -823,6 +877,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
       %{state | settings_known?: true, max_concurrent_streams: max}
     end
+
+    defp observe_settings(state), do: %{state | settings_known?: true}
 
     defp emit_streams(state) do
       Telemetry.execute(:streams, %{active: map_size(state.requests)}, state.telemetry_metadata)
@@ -845,7 +901,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
                scheme,
                host,
                port,
-               Keyword.merge(opts, mode: :passive, protocols: [:http2])
+               Keyword.merge(opts,
+                 mode: :passive,
+                 protocols: Keyword.get(opts, :protocols, [:http2])
+               )
              ),
            {:ok, conn} <- await_server_preface(conn, deadline) do
         Mint.HTTP.set_mode(conn, :active)

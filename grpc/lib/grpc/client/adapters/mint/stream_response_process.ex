@@ -18,7 +18,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # TODO: Refactor the GenServer.call/3 occurrences on this module to produce
   # telemetry events in case of failures
 
-  @accepted_types [:data, :trailers, :headers, :error]
+  @accepted_types [:data, :trailers, :headers, :error, :status]
+  @connect_events [:status, :headers, :trailers, :data]
   @header_types [:headers, :trailers]
 
   use GenServer
@@ -135,15 +136,39 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       pending_status: nil,
       data_seen: false,
       # The response ended with a `grpc-status`, or with an error, so it is complete.
-      terminated: false
+      terminated: false,
+      # The state of a Connect response, which has no `grpc-status`.
+      connect: connect_response(stream)
     }
 
     {:ok, state}
   end
 
+  defp connect_response(%{channel: %{protocol: :connect}} = stream),
+    do: GRPC.Client.Connect.Response.new(stream)
+
+  defp connect_response(_stream), do: nil
+
   @impl true
   def handle_call(:get_response, from, state) do
     {:noreply, put_in(state[:from], from), {:continue, :produce_response}}
+  end
+
+  def handle_call({:consume_response, event}, _from, %{connect: connect} = state)
+      when connect != nil and
+             (event == :done or (is_tuple(event) and elem(event, 0) in @connect_events)) do
+    cond do
+      state.failed ->
+        {:reply, :cancel, state, {:continue, :produce_response}}
+
+      # The call already ended (an error, a cancel): what follows is dropped.
+      state.terminated ->
+        {:reply, :ok, %{state | done: state.done or event == :done},
+         {:continue, :produce_response}}
+
+      true ->
+        consume_connect(event, state)
+    end
   end
 
   # After a message over the size limit the rest of the body can't be framed
@@ -279,6 +304,38 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
         {:noreply, %{state | responses: rest, from: nil}}
     end
   end
+
+  defp consume_connect(event, %{connect: connect} = state) do
+    {connect, items, action} = GRPC.Client.Connect.Response.consume(connect, event)
+    state = %{state | connect: connect}
+    state = Enum.reduce(items, state, &queue_connect_item/2)
+
+    case {action, event} do
+      # The response cannot be read any further: the request is reset.
+      {:cancel, _} ->
+        state = %{state | failed: true, terminated: true, done: true}
+        {:reply, :cancel, state, {:continue, :produce_response}}
+
+      {:ok, :done} ->
+        {:reply, :ok, %{state | terminated: true, done: true}, {:continue, :produce_response}}
+
+      {:ok, _} ->
+        {:reply, :ok, state, {:continue, :produce_response}}
+    end
+  end
+
+  # The headers and trailers of a response are produced only when the caller wants them.
+  defp queue_connect_item({type, _} = item, state) when type in @header_types do
+    if state.send_headers_or_trailers,
+      do: %{state | responses: :queue.in(item, state.responses)},
+      else: state
+  end
+
+  defp queue_connect_item({:error, _} = item, state),
+    do: %{state | responses: :queue.in(item, state.responses), terminated: true}
+
+  defp queue_connect_item(item, state),
+    do: %{state | responses: :queue.in(item, state.responses)}
 
   defp consume_headers(:headers, headers, %{terminated: false} = state) do
     case get_headers_response(headers, :headers, nil) do

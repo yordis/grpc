@@ -522,7 +522,9 @@ defmodule GRPC.Stub do
               server_stream: response_stream,
               codec: Keyword.get(opts, :codec, ch.codec),
               compressor: compressor,
-              accepted_compressors: accepted_compressors
+              accepted_compressors: accepted_compressors,
+              max_receive_message_length:
+                Keyword.get(opts, :max_receive_message_length, ch.max_receive_message_length)
           }
           |> GRPC.Client.Stream.put_payload(:__pool_lease_handle__, lease_handle)
 
@@ -1168,7 +1170,9 @@ defmodule GRPC.Stub do
     :metadata,
     :codec,
     :return_headers,
-    :http_method
+    :http_method,
+    :max_receive_message_length,
+    :cancel
   ]
   defp parse_req_opts(opts) when is_list(opts) do
     # Map.new is used so we can keep the last value

@@ -190,7 +190,9 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
     # the same HTTP/2 data frame.
     combined = buffer <> data
 
-    case drain_buffer(combined, state.compressor, codec, res_mod, responses) do
+    limit = state.grpc_stream.max_receive_message_length
+
+    case drain_buffer(combined, state.compressor, codec, res_mod, responses, limit) do
       {new_buffer, new_responses} ->
         new_state =
           %{state | buffer: new_buffer, responses: new_responses} |> Map.put(:data_seen, true)
@@ -384,8 +386,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # remaining bytes, at which point the leftover buffer and the populated queue
   # are returned as `{remaining_buffer, updated_queue}`. A message over the size
   # limit ends the pass with `{:error, error, updated_queue}`.
-  defp drain_buffer(buffer, compressor, codec, res_mod, responses_queue) do
-    case get_message(buffer, compressor) do
+  defp drain_buffer(buffer, compressor, codec, res_mod, responses_queue, limit) do
+    case get_message(buffer, compressor, limit) do
       {:error, error} ->
         {:error, error, responses_queue}
 
@@ -398,7 +400,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
               compressor,
               codec,
               res_mod,
-              :queue.in({:ok, response}, responses_queue)
+              :queue.in({:ok, response}, responses_queue),
+              limit
             )
 
           {:error, error} ->
@@ -412,9 +415,9 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
   # The prefix is checked here, as newer `GRPC.Message.get_message/2` does, and
   # that function raises for a message over `:max_message_length` or a gzip bomb.
-  defp get_message(buffer, compressor) do
-    with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer) do
-      case GRPC.Message.get_message(buffer, compressor) do
+  defp get_message(buffer, compressor, limit) do
+    with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer, limit) do
+      case GRPC.Message.get_message(buffer, compressor, max_message_length: limit) do
         {{1, _message}, _rest} when is_nil(compressor) ->
           {:error,
            GRPC.RPCError.exception(

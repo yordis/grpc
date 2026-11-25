@@ -1,6 +1,6 @@
 defmodule GRPC.Integration.ClientReceiveLimitTest do
   # The receive limit is set per channel and per call, without the application env.
-  use GRPC.Integration.TestCase, async: true
+  use GRPC.Integration.TestCase, async: false
 
   alias GRPC.Client.Adapters.{Gun, Mint}
   alias GRPC.RPCError
@@ -68,11 +68,11 @@ defmodule GRPC.Integration.ClientReceiveLimitTest do
 
       test "calls in parallel keep their own limits", %{connect_opts: connect_opts} do
         run_server(HelloServer, fn port ->
-          channel = connect(port, connect_opts, [])
-
           results =
             1..20
             |> Task.async_stream(fn n ->
+              # A call over its limit closes an HTTP/1.1 connection, so each call has its own.
+              channel = connect(port, connect_opts, [])
               limit = if rem(n, 2) == 0, do: 100, else: 10_000
               {limit, say_hello(channel, max_receive_message_length: limit)}
             end)

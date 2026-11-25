@@ -266,6 +266,10 @@ defmodule GRPC.Client.Connection do
       and needs the Mint adapter.
     * `:compressor` / `:accepted_compressors` – message compression
     * `:headers` – default metadata headers
+    * `:max_receive_message_length` – the largest reply message, in bytes, that
+      calls on this connection accept. A longer message fails the call with
+      `RESOURCE_EXHAUSTED`. A call can set its own with the same option. Without
+      either, the `:max_message_length` application setting applies.
     * `:connect_timeout` – how long `connect/2` waits for the first
       establishment attempt in ms (default: 15000)
     * `:flap_window` – a connection that dies within this many ms of
@@ -1294,6 +1298,7 @@ defmodule GRPC.Client.Connection do
         compressor: nil,
         accepted_compressors: [],
         headers: [],
+        max_receive_message_length: nil,
         lb_policy: nil,
         connect_timeout: @default_connect_timeout,
         flap_window: @default_flap_window,
@@ -1329,7 +1334,8 @@ defmodule GRPC.Client.Connection do
       protocol: norm_opts[:protocol],
       compressor: norm_opts[:compressor],
       accepted_compressors: accepted_compressors,
-      headers: norm_opts[:headers]
+      headers: norm_opts[:headers],
+      max_receive_message_length: norm_opts[:max_receive_message_length]
     }
 
     %__MODULE__{

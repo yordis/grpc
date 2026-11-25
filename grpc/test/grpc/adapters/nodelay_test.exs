@@ -21,7 +21,9 @@ defmodule GRPC.Client.Adapters.NodelayTest do
     {:ok, _, port} = GRPC.Server.start_endpoint(PlainEndpoint, 0)
 
     {:ok, _, tls_port} =
-      GRPC.Server.start_endpoint(TLSEndpoint, 0, adapter_opts: [cred: build(:credential)])
+      GRPC.Server.start_endpoint(TLSEndpoint, 0,
+        adapter_opts: [cred: GRPC.TestCerts.server_credential()]
+      )
 
     on_exit(fn ->
       :ok = GRPC.Server.stop_endpoint(PlainEndpoint)

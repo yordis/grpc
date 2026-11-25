@@ -49,15 +49,16 @@ defmodule GRPC.Server.Adapters.CowboyTest do
   end
 
   describe "timeouts" do
-    # Cowboy closes an HTTP/1.1 connection that is idle between requests after
-    # `request_timeout`, 5 seconds by default. A client that reuses the connection at that
-    # moment fails with "server closed idle connection".
-    test "an idle HTTP/1.1 connection is kept as long as an idle HTTP/2 one" do
-      assert %{request_timeout: :infinity, idle_timeout: :infinity} = protocol_opts([])
+    # `request_timeout` is the only guard against an HTTP/1.1 client that connects and
+    # sends nothing, so it stays finite. It also closes a connection that waits for its
+    # next request, and a client that reuses the connection at that moment fails with
+    # "server closed idle connection", so it is far above Cowboy's 5 seconds.
+    test "an idle HTTP/1.1 connection has a finite wait, whatever idle_timeout is" do
+      assert %{request_timeout: 60_000, idle_timeout: :infinity} = protocol_opts([])
     end
 
-    test "idle_timeout sets the time of an idle HTTP/1.1 connection too" do
-      assert %{request_timeout: 1_000, idle_timeout: 1_000} =
+    test "idle_timeout does not change the HTTP/1.1 wait for a request" do
+      assert %{request_timeout: 60_000, idle_timeout: 1_000} =
                protocol_opts(idle_timeout: 1_000)
     end
 

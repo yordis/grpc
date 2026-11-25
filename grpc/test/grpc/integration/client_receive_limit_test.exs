@@ -9,14 +9,14 @@ defmodule GRPC.Integration.ClientReceiveLimitTest do
   @reply_size 600
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     def say_hello(_req, _stream),
       do: %Helloworld.HelloReply{message: String.duplicate("x", 600)}
   end
 
   defmodule RouteServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service
+    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true
 
     def list_features(_rect, stream) do
       GRPC.Server.send_reply(stream, %Routeguide.Feature{name: String.duplicate("x", 600)})
@@ -55,6 +55,10 @@ defmodule GRPC.Integration.ClientReceiveLimitTest do
           channel = connect(port, connect_opts, max_receive_message_length: 100)
 
           assert {:error, %RPCError{status: @resource_exhausted}} = say_hello(channel, [])
+
+          # A call over its limit closes an HTTP/1.1 connection, and the close reaches the
+          # channel after the call returns, so the next call has its own channel.
+          channel = connect(port, connect_opts, max_receive_message_length: 100)
 
           assert {:ok, %Helloworld.HelloReply{}} =
                    say_hello(channel, max_receive_message_length: 10_000)
@@ -96,6 +100,10 @@ defmodule GRPC.Integration.ClientReceiveLimitTest do
 
           assert {:error, %RPCError{status: @resource_exhausted}} =
                    replies |> Enum.to_list() |> List.last()
+
+          # A call over its limit closes an HTTP/1.1 connection, and the close reaches the
+          # channel after the call returns, so the next call has its own channel.
+          channel = connect(port, connect_opts, [])
 
           {:ok, replies} =
             Routeguide.RouteGuide.Stub.list_features(channel, %Routeguide.Rectangle{},

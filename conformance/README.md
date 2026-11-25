@@ -111,7 +111,9 @@ Measured with the committed, empty known-failing lists:
 | Client, `config/client.yaml`, Mint | 1052 | 0 | 1052 |
 | Client, `config/client.yaml`, Gun | 1052 | 0 | 1052 |
 | Client, `config/client.connect.yaml`, Mint | 1764 | 0 | 1764 |
+| Client, `config/client.connect.yaml`, Gun | 1764 | 0 | 1764 |
 | Client, `config/client.grpcweb.yaml`, Mint | 2046 | 0 | 2046 |
+| Client, `config/client.grpcweb.yaml`, Gun | 2046 | 0 | 2046 |
 
 When a regression or a new feature adds failures, add them to the matching list as grouped
 globs with the root cause written above each group, and remove them as the fixes land.

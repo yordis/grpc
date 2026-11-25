@@ -19,7 +19,9 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   # 4 MiB – matches gRPC-Go's default max receive message size. Override per-server with
   # the :max_body_size option: a number of bytes, or :infinity for no limit. Without the
-  # option, or with nil, the default applies.
+  # option, or with nil, the default applies to a request that arrives as one body. A
+  # request stream is bounded per message by :max_message_length instead, and only an
+  # explicit :max_body_size caps its total.
   @default_max_body_size 4 * 1024 * 1024
   # Cowboy's own default for how much `read_body` collects before it returns.
   @default_read_length 8_000_000
@@ -37,9 +39,11 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     http_method = extract_http_method(req)
     exception_log_filter = extract_exception_log_filter_opt(opts)
 
-    with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, opts),
+    with {:ok, access_mode, sub_type, content_type} <-
+           find_content_type_subtype(req, server, opts),
          {:ok, codec} <- find_codec(sub_type, content_type, server),
          :ok <- check_connect_get(req, server, route, access_mode),
+         :ok <- check_connect_shape(req, server, route, access_mode, opts),
          {:ok, compressor} <- find_compressor(req, server, access_mode) do
       stream_pid = self()
       started_at = System.monotonic_time()
@@ -79,7 +83,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
           Process.send_after(self(), {:handling_timeout, self()}, timeout_ms)
         end
 
-      max_body_size = Map.get(opts, :max_body_size) || @default_max_body_size
+      max_body_size = max_body_size(opts, server, route)
 
       {
         :cowboy_loop,
@@ -205,7 +209,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
-  defp find_content_type_subtype(req, opts) do
+  defp find_content_type_subtype(req, server, opts) do
     content_type =
       case :cowboy_req.header("content-type", req) do
         :undefined ->
@@ -232,9 +236,17 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     access_mode = resolve_access_mode(req, access_mode, subtype)
     {access_mode, subtype} = pin_transcoded_route(opts, req, access_mode, subtype)
-    {access_mode, subtype} = detect_connect(opts, req, content_type, access_mode, subtype)
+    connect? = server.__meta__(:connect)
+
+    {access_mode, subtype} =
+      if connect?,
+        do: detect_connect(opts, req, content_type, access_mode, subtype),
+        else: {access_mode, subtype}
 
     cond do
+      not connect? ->
+        {:ok, access_mode, subtype, content_type}
+
       wrong_connect_method?(opts, req, content_type) ->
         {:error,
          {:connect, 405, %{"allow" => "POST"},
@@ -330,6 +342,49 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   defp check_connect_get(_req, _server, _route, _access_mode), do: :ok
+
+  # A unary content type is for a unary method, a streaming one for a streaming method.
+  # A GET is always unary and is checked by `check_connect_get/4`.
+  defp check_connect_shape(req, server, route, :connectrpc, opts)
+       when not is_map_key(opts, :http_transcode_route) do
+    with :post <- extract_http_method(req),
+         {kind, _codec} <-
+           GRPC.Server.Connect.parse_content_type(:cowboy_req.header("content-type", req)),
+         grpc_type when not is_nil(grpc_type) <- rpc_grpc_type(server, route),
+         false <- kind == :stream == (grpc_type != :unary) do
+      {:error,
+       {:connect, 415, %{"accept-post" => accept_post(grpc_type)},
+        RPCError.exception(
+          status: :unknown,
+          message: "the content-type does not fit this method"
+        )}}
+    else
+      _ -> :ok
+    end
+  end
+
+  defp check_connect_shape(_req, _server, _route, _access_mode, _opts), do: :ok
+
+  defp accept_post(:unary), do: "application/json, application/proto"
+  defp accept_post(_), do: "application/connect+json, application/connect+proto"
+
+  defp max_body_size(opts, server, route) do
+    case Map.get(opts, :max_body_size) do
+      nil -> if request_stream?(server, route), do: :infinity, else: @default_max_body_size
+      limit -> limit
+    end
+  end
+
+  defp request_stream?(server, route),
+    do: rpc_grpc_type(server, route) in [:client_stream, :bidirectional_stream]
+
+  defp rpc_grpc_type(server, route) do
+    service = server.__meta__(:service)
+
+    Enum.find_value(service.__rpc_calls__(), fn {name, _, _, _} = rpc ->
+      if "/#{service.__meta__(:name)}/#{name}" == route, do: GRPC.Service.grpc_type(rpc)
+    end)
+  end
 
   defp get_allowed?(server, route) do
     service = server.__meta__(:service)
@@ -837,6 +892,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   def info({:stream_trailers, _trailers}, req, %{access_mode: :connectrpc} = state) do
+    state = reply_done(state)
     ConnectResponse.stream_trailers(req, state)
   end
 
@@ -848,12 +904,17 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     all_trailers = Map.merge(trailers, metadata)
 
+    state = reply_done(state)
     req = check_sent_resp(req)
     stream_grpcweb_trailers(req, all_trailers, state)
     :cowboy_req.stream_trailers(all_trailers, req)
 
     {:ok, req, state}
   end
+
+  # The reply is out. The RPC process may not have ended yet, so a deadline that fires
+  # now has nothing left to answer.
+  def info({:handling_timeout, _}, req, %{reply_done?: true} = state), do: {:ok, req, state}
 
   def info({:handling_timeout, _}, req, state) do
     error = %RPCError{status: GRPC.Status.deadline_exceeded(), message: "Deadline expired"}
@@ -1392,6 +1453,13 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   defp preflight?(%{method: "OPTIONS"}), do: true
   defp preflight?(_), do: false
+
+  # The call has its reply. Its deadline timer is cancelled, and a timeout message that is
+  # already in the mailbox is ignored through the flag.
+  defp reply_done(state) do
+    if state[:handling_timer], do: Process.cancel_timer(state.handling_timer)
+    Map.put(state, :reply_done?, true)
+  end
 
   defp send_error(req, error, %{access_mode: :connectrpc} = state, reason) do
     abort_rpc(state, reason)

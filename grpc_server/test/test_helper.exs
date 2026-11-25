@@ -10,3 +10,5 @@ codecs = [
 Enum.each(codecs, &Code.ensure_loaded/1)
 
 ExUnit.start(capture_log: true)
+
+GRPC.TestCerts.init()

@@ -786,8 +786,16 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
           stream_response_pid: dead_pid
         )
 
-      %{stream: stream, pid: live_pid} =
-        start_feature_request(pid, method, get_feature, headers)
+      # The server sends nothing for a request that has no body, so once this
+      # call returns the connection process has nothing else to handle.
+      _ = :sys.get_state(pid)
+
+      # Hold the connection process while the queued write is put in place and
+      # the response process is killed, so that the exit is the next thing it
+      # handles. Any frame that arrived first would flush the queued write to
+      # the still registered request and reply `:ok`, which is correct, and
+      # is not what this test is about.
+      :ok = :sys.suspend(pid)
 
       # A body write still waiting for flow control when the process exits.
       from = {self(), make_ref()}
@@ -798,6 +806,8 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       end)
 
       Process.exit(dead_pid, :kill)
+      await(fn -> down_message_queued?(pid, dead_pid) end)
+      :ok = :sys.resume(pid)
 
       assert_receive {:telemetry, [:grpc, :client, :mint, :stream_response, :dead], %{},
                       %{request_ref: ^dead_ref, stream_response_pid: ^dead_pid}},
@@ -812,7 +822,10 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       {_pid, tag} = from
       assert_receive {^tag, {:error, %GRPC.RPCError{status: 1}}}
 
-      # The other request on the same connection still completes.
+      # Another request on the same connection still completes.
+      %{stream: stream, pid: live_pid} =
+        start_feature_request(pid, method, get_feature, headers)
+
       assert [{:ok, %Routeguide.Feature{name: "1,2"}}] = Enum.to_list(stream)
       assert Process.alive?(pid)
       assert_process_exits(live_pid)
@@ -1152,6 +1165,11 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       pid: response_pid,
       ref: ref
     }
+  end
+
+  defp down_message_queued?(pid, down_pid) do
+    {:messages, messages} = Process.info(pid, :messages)
+    Enum.any?(messages, &match?({:DOWN, _, :process, ^down_pid, _}, &1))
   end
 
   # The process stops itself once its stream is done.

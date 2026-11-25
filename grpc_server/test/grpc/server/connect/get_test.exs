@@ -15,7 +15,7 @@ defmodule GRPC.Server.Connect.GetTest do
   end
 
   defmodule ReadServer do
-    use GRPC.Server, service: ReadService, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server, service: ReadService, connect: true, compressors: [GRPC.Compressor.Gzip]
 
     def read(req, stream) do
       GRPC.Server.set_trailers(stream, %{"x-custom-trailer" => "from-server-trailer"})

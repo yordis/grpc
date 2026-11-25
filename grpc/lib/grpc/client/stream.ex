@@ -27,6 +27,9 @@ defmodule GRPC.Client.Stream do
             server_stream: nil,
             # TODO: it's better to get canceled status from adapter
             canceled: false,
+            # Set by `GRPC.Stub.cancel/1` and seen by the replies of the call, which share
+            # it, as copies of the struct don't share `canceled`. `nil` before the call.
+            cancel_flag: nil,
             compressor: nil,
             accepted_compressors: [],
             # The largest reply message, in bytes, of this call. `nil` is the

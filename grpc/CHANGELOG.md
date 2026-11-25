@@ -26,6 +26,8 @@
 
 ### Bug Fixes
 
+  * A streaming call cancelled with `GRPC.Stub.cancel/1`, through its stream or its cancel handle, now yields `CANCELLED` as its next reply and ends there, on every adapter and protocol, even when the rest of the response had arrived before the cancel. Before, the replies the adapter had already received, and a successful end, could follow the cancel. `GRPC.Client.Stream` gained the internal `:cancel_flag` field that carries the cancel to the replies.
+
   * A reply that cannot be decompressed fails with `INTERNAL` on every adapter and protocol, through one shared path.
 
   * A Connect error body is bounded (the receive limit, at most 64 KiB) and fails the call cleanly when it is larger.

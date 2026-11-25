@@ -544,7 +544,8 @@ defmodule GRPC.Stub do
               compressor: compressor,
               accepted_compressors: accepted_compressors,
               max_receive_message_length:
-                Keyword.get(opts, :max_receive_message_length, ch.max_receive_message_length)
+                Keyword.get(opts, :max_receive_message_length, ch.max_receive_message_length),
+              cancel_flag: if(req_stream || response_stream, do: :atomics.new(1, []))
           }
           |> GRPC.Client.Stream.put_payload(:__pool_lease_handle__, lease_handle)
 
@@ -1034,6 +1035,7 @@ defmodule GRPC.Stub do
   def cancel(%GRPC.Client.CancelHandle{} = handle), do: GRPC.Client.CancelHandle.cancel(handle)
 
   def cancel(%{channel: channel} = stream) do
+    if stream.cancel_flag, do: :atomics.put(stream.cancel_flag, 1, 1)
     release_stream_lease(stream)
 
     case channel.adapter.cancel(stream) do
@@ -1230,9 +1232,11 @@ defmodule GRPC.Stub do
   end
 
   # The replies of a server-streaming call reset the stream when the caller halts them
-  # before the end, and drop the cancel handle of the call once they are over.
+  # before the end, and drop the cancel handle of the call once they are over. Once the
+  # call is cancelled, the next reply is the CANCELED error and the replies end, though
+  # the adapter may have received the rest of the response before the cancel.
   defp wrap_replies(enum_stream, stream, lease_handle) do
-    if lease_handle == nil and stream.grpc_type != :server_stream do
+    if lease_handle == nil and stream.grpc_type != :server_stream and stream.cancel_flag == nil do
       enum_stream
     else
       reset_on_halt? = stream.grpc_type == :server_stream
@@ -1241,7 +1245,19 @@ defmodule GRPC.Stub do
       Stream.transform(
         enum_stream,
         fn -> :atomics.new(1, []) end,
-        fn item, finished -> {[item], finished} end,
+        fn item, finished ->
+          cond do
+            :atomics.get(finished, 1) == 1 ->
+              {:halt, finished}
+
+            canceled?(stream, cancel_handle) ->
+              :atomics.put(finished, 1, 1)
+              {[{:error, @canceled_error}], finished}
+
+            true ->
+              {[item], finished}
+          end
+        end,
         fn finished ->
           :atomics.put(finished, 1, 1)
           {[], finished}
@@ -1255,6 +1271,11 @@ defmodule GRPC.Stub do
         end
       )
     end
+  end
+
+  defp canceled?(stream, handle) do
+    (stream.cancel_flag != nil and :atomics.get(stream.cancel_flag, 1) == 1) or
+      (handle != nil and GRPC.Client.CancelHandle.canceled?(handle))
   end
 
   defp stream_cancel_handle(%{payload: %{__cancel_handle__: handle}}), do: handle

@@ -26,7 +26,11 @@ defmodule Conformance.Client.Main do
         wait_for(0, in_flight)
 
       request ->
-        in_flight = if in_flight >= @max_in_flight, do: wait_for(@max_in_flight - 1, in_flight), else: in_flight
+        in_flight =
+          if in_flight >= @max_in_flight,
+            do: wait_for(@max_in_flight - 1, in_flight),
+            else: in_flight
+
         parent = self()
 
         spawn(fn ->
@@ -56,7 +60,9 @@ defmodule Conformance.Client.Main do
       _ ->
         %ClientCompatResponse{
           test_name: name,
-          result: {:error, %ClientErrorResult{message: "call did not finish within #{@call_deadline_ms} ms"}}
+          result:
+            {:error,
+             %ClientErrorResult{message: "call did not finish within #{@call_deadline_ms} ms"}}
         }
     end
   end
@@ -67,7 +73,8 @@ defmodule Conformance.Client.Main do
     error ->
       %ClientCompatResponse{
         test_name: name,
-        result: {:error, %ClientErrorResult{message: Exception.format(:error, error, __STACKTRACE__)}}
+        result:
+          {:error, %ClientErrorResult{message: Exception.format(:error, error, __STACKTRACE__)}}
       }
   catch
     kind, reason ->
@@ -103,6 +110,10 @@ defmodule Conformance.Client.Main do
   defp write(out, %ClientCompatResponse{} = response) do
     bin = ClientCompatResponse.encode(response)
 
-    Agent.get(out, fn _ -> IO.binwrite(:stdio, <<byte_size(bin)::32-big, bin::binary>>) end, :infinity)
+    Agent.get(
+      out,
+      fn _ -> IO.binwrite(:stdio, <<byte_size(bin)::32-big, bin::binary>>) end,
+      :infinity
+    )
   end
 end

@@ -44,7 +44,12 @@ defmodule GRPC.Client.GrpcWeb.ResponseTest do
 
       assert [
                {:error,
-                %GRPC.RPCError{status: 10, message: "aborted", headers: headers, trailers: trailers}}
+                %GRPC.RPCError{
+                  status: 10,
+                  message: "aborted",
+                  headers: headers,
+                  trailers: trailers
+                }}
              ] = items
 
       assert trailers["x-custom-trailer"] == "t"
@@ -165,7 +170,10 @@ defmodule GRPC.Client.GrpcWeb.ResponseTest do
       {_response, items, :ok} =
         feed(response(), [{:status, 200}, {:headers, @headers}, {:data, cut}, :done])
 
-      assert [{:headers, _}, {:error, %GRPC.RPCError{status: 13, message: "The response ended" <> _}}] =
+      assert [
+               {:headers, _},
+               {:error, %GRPC.RPCError{status: 13, message: "The response ended" <> _}}
+             ] =
                items
     end
   end

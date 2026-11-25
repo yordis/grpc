@@ -10,7 +10,8 @@ defmodule Conformance.Service do
   use GRPC.Server,
     service: Connectrpc.Conformance.V1.ConformanceService.Service,
     codecs: [GRPC.Codec.Proto, GRPC.Codec.WebText, GRPC.Codec.JSON],
-    compressors: [GRPC.Compressor.Gzip]
+    compressors: [GRPC.Compressor.Gzip],
+    connect: true
 
   alias Connectrpc.Conformance.V1.{
     BidiStreamResponse,

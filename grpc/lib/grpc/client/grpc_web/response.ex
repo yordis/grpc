@@ -70,7 +70,10 @@ defmodule GRPC.Client.GrpcWeb.Response do
 
   # HTTP trailers, which a server may send in place of the trailers envelope when the
   # body is empty. They carry the `grpc-status`.
-  def consume(%{status: 200, ended: false, bad_content_type: nil} = response, {:headers, trailers}) do
+  def consume(
+        %{status: 200, ended: false, bad_content_type: nil} = response,
+        {:headers, trailers}
+      ) do
     decoded = HTTP2.decode_headers(trailers)
 
     if response.body == <<>> and Map.has_key?(decoded, "grpc-status") do
@@ -184,7 +187,8 @@ defmodule GRPC.Client.GrpcWeb.Response do
     end
   end
 
-  defp with_metadata(error, headers, trailers), do: %{error | headers: headers, trailers: trailers}
+  defp with_metadata(error, headers, trailers),
+    do: %{error | headers: headers, trailers: trailers}
 
   defp missing_status(_response, <<>>),
     do: GRPC.RPCError.exception(GRPC.Status.internal(), "Missing grpc-status in the response.")

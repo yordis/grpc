@@ -4,7 +4,7 @@ defmodule GRPC.Server.StreamTimeoutTest do
   alias GRPC.Test.ConnectClient
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     def say_hello(_req, stream) do
       %Helloworld.HelloReply{message: "timeout:#{inspect(GRPC.Server.Stream.timeout_ms(stream))}"}

@@ -36,6 +36,8 @@ defmodule GRPC.Integration.ConnectClientGetTest do
     def watch(_req, stream), do: GRPC.Server.send_reply(stream, %Helloworld.HelloReply{})
   end
 
+  def connect(port, opts), do: connect(port, Mint, opts)
+
   def connect(port, adapter, opts) do
     {:ok, channel} =
       GRPC.Stub.connect("localhost:#{port}", [adapter: adapter, protocol: :connect] ++ opts)

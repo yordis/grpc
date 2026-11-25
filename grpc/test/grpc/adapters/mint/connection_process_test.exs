@@ -856,9 +856,16 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
 
       # The connection process is blocked on the suspended process, so this
       # request waits in its mailbox until the process is killed below.
+      test = self()
+
       live_request =
         Task.async(fn ->
-          start_feature_request(pid, method, "/routeguide.RouteGuide/GetFeature", headers)
+          request =
+            start_feature_request(pid, method, "/routeguide.RouteGuide/GetFeature", headers)
+
+          # The response process ends with the process that started it.
+          send(test, {:started, request})
+          Process.sleep(:infinity)
         end)
 
       Process.exit(dead_pid, :kill)
@@ -867,10 +874,11 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
                       %{request_ref: ^dead_ref, stream_response_pid: ^dead_pid}},
                      1_000
 
-      %{stream: stream, pid: live_pid} = Task.await(live_request)
+      assert_receive {:started, %{stream: stream, pid: live_pid}}, 5_000
       assert [{:ok, %Routeguide.Feature{name: "1,2"}}] = Enum.to_list(stream)
       assert Process.alive?(pid)
       assert_process_exits(live_pid)
+      Task.shutdown(live_request, :brutal_kill)
       assert %{} == :sys.get_state(pid).requests
       assert :queue.is_empty(:sys.get_state(pid).request_stream_queue)
     end

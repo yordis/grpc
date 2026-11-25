@@ -85,6 +85,11 @@ defmodule Conformance.Client.Main do
   end
 
   defp read_request do
+    # A run of the gate once found the device decoding UTF-8 at its first read, which fails a
+    # read of bytes with `no_translation`. Setting the encoding right before each read leaves
+    # no window for that.
+    :ok = :io.setopts(:standard_io, [:binary, encoding: :latin1])
+
     case IO.binread(:stdio, 4) do
       :eof ->
         :eof

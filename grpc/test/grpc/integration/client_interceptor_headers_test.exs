@@ -526,10 +526,8 @@ defmodule GRPC.Integration.ClientInterceptorHeadersTest do
 
       test "server streaming: the trailers reach an outer interceptor when the caller reads in another process",
            %{adapter: adapter} do
+        # A stream that an adapter opened in a task ends with the task.
         plains = [{Upcaser, []}, {Eager, %{}}, {Eager, %{task: true}}]
-        # A stream that Gun opened in a task ends with the task.
-        plains =
-          if adapter == GRPC.Client.Adapters.Mint, do: [{TaskCaller, []} | plains], else: plains
 
         for plain <- plains do
           with_channel(adapter, [plain, recorder(:out)], fn channel ->

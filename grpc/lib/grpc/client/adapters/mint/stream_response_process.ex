@@ -24,8 +24,11 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
   use GenServer
 
+  # The process that starts it owns it. It ends when the owner does, whatever the reason: a
+  # link does not carry a normal exit, and nobody is left to read what it buffers. The
+  # connection process sees it end and resets the request.
   def start_link(stream, send_headers_or_trailers?) do
-    GenServer.start_link(__MODULE__, {stream, send_headers_or_trailers?})
+    GenServer.start_link(__MODULE__, {stream, send_headers_or_trailers?, self()})
   end
 
   @doc """
@@ -120,8 +123,11 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # Callbacks
 
   @impl true
-  def init({stream, send_headers_or_trailers?}) do
+  def init({stream, send_headers_or_trailers?, owner}) do
+    owner_monitor = Process.monitor(owner)
+
     state = %{
+      owner_monitor: owner_monitor,
       grpc_stream: stream,
       send_headers_or_trailers: send_headers_or_trailers?,
       buffer: <<>>,
@@ -288,6 +294,16 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   end
 
   @impl true
+  def handle_info(
+        {:DOWN, owner_monitor, :process, _owner, _reason},
+        %{owner_monitor: owner_monitor} = state
+      ) do
+    {:stop, :normal, state}
+  end
+
+  def handle_info(_message, state), do: {:noreply, state}
+
+  @impl true
   def handle_continue(:produce_response, state) do
     no_responses? = :queue.is_empty(state.responses)
     without_from? = is_nil(state.from)
@@ -390,7 +406,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # are returned as `{remaining_buffer, updated_queue}`. A message over the size
   # limit ends the pass with `{:error, error, updated_queue}`.
   defp drain_buffer(buffer, compressor, codec, res_mod, responses_queue, limit) do
-    case get_message(buffer, compressor, limit) do
+    case GRPC.Client.Decompress.get_message(buffer, compressor, limit) do
       {:error, error} ->
         {:error, error, responses_queue}
 
@@ -414,26 +430,6 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       _ ->
         {buffer, responses_queue}
     end
-  end
-
-  # The prefix is checked here, as newer `GRPC.Message.get_message/2` does, and
-  # that function raises for a message over `:max_message_length` or a gzip bomb.
-  defp get_message(buffer, compressor, limit) do
-    with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer, limit) do
-      case GRPC.Message.get_message(buffer, compressor, max_message_length: limit) do
-        {{1, _message}, _rest} when is_nil(compressor) ->
-          {:error,
-           GRPC.RPCError.exception(
-             status: :internal,
-             message: "Compressed flag is set, but not specified in headers."
-           )}
-
-        other ->
-          other
-      end
-    end
-  rescue
-    error in GRPC.RPCError -> {:error, error}
   end
 
   defp get_headers_response(headers, type, response_headers) do

@@ -61,12 +61,12 @@ if Code.ensure_loaded?(:gun) do
     alias GRPC.Client.Adapter
     alias GRPC.Client.Connect
     alias GRPC.Client.Adapters.Gun.ConnectionProcess
+    alias GRPC.Client.Adapters.Gun.ReplyReader
 
     @default_tcp_opts [nodelay: true]
     @max_retries 100
     # Default of `:response_window`, in bytes.
     @default_response_window 1_048_576
-    @deadline_tolerance 1
     # One frame. A smaller window stalls a cowlib peer, which holds data back
     # while the stream window is under 16,384 bytes and the data does not fit.
     @min_response_window 16_384
@@ -431,7 +431,7 @@ if Code.ensure_loaded?(:gun) do
 
       case connect_headers(state) do
         {:ok, headers, state} ->
-          replies = connect_replies(state)
+          replies = connect_replies(state, type)
 
           if opts[:return_headers],
             do: {:ok, replies, %{headers: headers}},
@@ -508,14 +508,20 @@ if Code.ensure_loaded?(:gun) do
 
     # The replies of a streaming call are read from the response once, however many times
     # the caller enumerates them, as a caller does that reads a reply after each request of
-    # a bidi stream. The state of the read is in an agent, linked to the caller, that goes
-    # away with the last item.
-    defp connect_replies(state) do
-      {:ok, agent} = Agent.start_link(fn -> state end)
-      Stream.resource(fn -> agent end, &connect_take/1, fn _agent -> :ok end)
+    # a bidi stream. The state of the read is in a process that goes away with the caller, or
+    # with the last item. A caller that stops reading a server stream before its end has no
+    # use for the rest of it, so the request is reset.
+    defp connect_replies(state, type) do
+      {:ok, reader} = ReplyReader.start(state)
+
+      Stream.resource(
+        fn -> reader end,
+        &connect_take/1,
+        &connect_release(&1, type)
+      )
     end
 
-    defp connect_take(agent) do
+    defp connect_take(reader) do
       take = fn state ->
         case connect_next(state) do
           nil -> {:halt, state}
@@ -523,17 +529,32 @@ if Code.ensure_loaded?(:gun) do
         end
       end
 
-      case Agent.get_and_update(agent, take, :infinity) do
+      case ReplyReader.get_and_update(reader, take) do
         {:item, item} ->
-          {[item], agent}
+          {[item], reader}
 
         :halt ->
-          Agent.stop(agent)
-          {:halt, agent}
+          ReplyReader.stop(reader)
+          {:halt, reader}
       end
     catch
-      :exit, _reason -> {:halt, agent}
+      :exit, _reason -> {:halt, reader}
     end
+
+    # A bidi stream is read in parts, and its reader stays for the next part: it ends with the
+    # last item or with the caller.
+    defp connect_release(reader, :server_stream) do
+      ReplyReader.get_and_update(reader, fn state ->
+        unless state.done, do: cancel(state.stream)
+        {:ok, %{state | done: true}}
+      end)
+
+      ReplyReader.stop(reader)
+    catch
+      :exit, _reason -> :ok
+    end
+
+    defp connect_release(_reader, _type), do: :ok
 
     # The next item of a streaming call. An error is the last one.
     defp connect_next(%{items: [{:error, error} | _]} = state) do
@@ -732,17 +753,18 @@ if Code.ensure_loaded?(:gun) do
 
     defp await_error({:error, {:connection_error, msg}}, _deadline), do: connection_error(msg)
 
-    # A server enforces the `grpc-timeout` it was sent from when the request reached it,
-    # so never before the client's own deadline. A CANCEL reset once the deadline has
-    # passed is that deadline, whichever side notices first.
-    defp await_error({:error, {:stream_error, msg}}, deadline) do
-      if cancel_reset?(msg) and near_deadline?(deadline) do
+    defp await_error({:error, {:stream_error, {:stream_error, code, _human}}}, deadline) do
+      if code == :cancel and GRPC.Client.ResetCode.at_deadline?(deadline) do
         deadline_exceeded()
       else
         GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
-
-        {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+        {:error, GRPC.Client.ResetCode.error(code)}
       end
+    end
+
+    defp await_error({:error, {:stream_error, _other}}, _deadline) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
+      {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "stream reset")}
     end
 
     # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
@@ -936,7 +958,11 @@ if Code.ensure_loaded?(:gun) do
              ended: ended
            } = stream
          ) do
-      case get_message(buffer, compressor, stream.stream.max_receive_message_length) do
+      case GRPC.Client.Decompress.get_message(
+             buffer,
+             compressor,
+             stream.stream.max_receive_message_length
+           ) do
         {:error, _} = error ->
           # The rest of the message is not read: reset the stream.
           cancel(stream.stream)
@@ -984,40 +1010,6 @@ if Code.ensure_loaded?(:gun) do
         "The response ended in the middle of a message."
       )
     end
-
-    # A message over `:max_message_length` ends the stream with an error item.
-    # The prefix is checked here, as newer `GRPC.Message.get_message/1` does, and
-    # that function raises for it.
-    defp get_message(buffer, compressor, limit) do
-      with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer, limit) do
-        case GRPC.Message.get_message(buffer, compressor, max_message_length: limit) do
-          {{1, _message}, _rest} when is_nil(compressor) ->
-            {:error,
-             GRPC.RPCError.exception(
-               status: :internal,
-               message: "Compressed flag is set, but not specified in headers."
-             )}
-
-          other ->
-            other
-        end
-      end
-    rescue
-      error in GRPC.RPCError ->
-        {:error, error}
-
-      _ ->
-        {:error,
-         GRPC.RPCError.exception(status: :internal, message: "Message could not be decompressed.")}
-    end
-
-    defp cancel_reset?({:stream_error, :cancel, _}), do: true
-    defp cancel_reset?(_), do: false
-
-    defp near_deadline?(deadline) when is_integer(deadline),
-      do: deadline - @deadline_tolerance <= System.monotonic_time(:millisecond)
-
-    defp near_deadline?(_), do: false
 
     defp deadline(nil), do: :infinity
     defp deadline(:infinity), do: :infinity

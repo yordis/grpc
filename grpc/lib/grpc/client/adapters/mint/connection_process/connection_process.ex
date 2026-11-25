@@ -524,7 +524,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     defp cancel_dead_stream(state, request_ref, pid, reason) do
-      Logger.warning(
+      # A response process ends with its caller, which is how a caller that is done with a
+      # stream releases it.
+      level = if reason in [:normal, :shutdown], do: :debug, else: :warning
+
+      Logger.log(
+        level,
         "stream response process #{inspect(pid)} is not alive (#{inspect(reason)}), cancelling request #{inspect(request_ref)}"
       )
 

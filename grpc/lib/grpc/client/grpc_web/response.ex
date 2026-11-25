@@ -257,7 +257,7 @@ defmodule GRPC.Client.GrpcWeb.Response do
          )}
 
       compressor ->
-        {:ok, compressor.decompress(payload)}
+        GRPC.Client.Decompress.run(compressor, payload)
     end
   end
 

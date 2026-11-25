@@ -216,7 +216,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     http_method = extract_http_method(req)
 
     {:ok, access_mode, subtype} =
-      case extract_subtype(content_type) do
+      case subtype_of(req, content_type, http_method) do
         {:ok, :unknown, "unknown"} ->
           if http_method == :post do
             {:ok, :grpc, "proto"}
@@ -394,7 +394,6 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         end
     end
   end
-
 
   defp stream_content_type?(req) do
     match?(
@@ -1333,6 +1332,23 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         end
     end
   end
+
+  # A Connect GET names its codec in the query, not in a content type. It is resolved
+  # later by `detect_connect/5`, so it is not "invalid" here.
+  defp subtype_of(req, content_type, :get) do
+    case connect_codec(req, content_type) do
+      {:ok, _codec_name} -> {:ok, :unknown, "unknown"}
+      :error -> extract_subtype(content_type)
+    end
+  end
+
+  defp subtype_of(_req, content_type, _http_method), do: extract_subtype(content_type)
+
+  # Connect content types are resolved later by `detect_connect/5`.
+  defp extract_subtype("application/proto"), do: {:ok, :unknown, "unknown"}
+  defp extract_subtype("application/proto;" <> _), do: {:ok, :unknown, "unknown"}
+  defp extract_subtype("application/connect+proto" <> _), do: {:ok, :unknown, "unknown"}
+  defp extract_subtype("application/connect+json" <> _), do: {:ok, :unknown, "unknown"}
 
   defp extract_subtype("application/json"), do: {:ok, :http_transcoding, "json"}
   defp extract_subtype("application/json;" <> _), do: {:ok, :http_transcoding, "json"}

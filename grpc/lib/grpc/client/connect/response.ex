@@ -138,7 +138,7 @@ defmodule GRPC.Client.Connect.Response do
   defp envelope(response, flag, payload) do
     with {:ok, payload} <- decompress_envelope(response, flag, payload) do
       if (flag &&& 2) == 2 do
-        end_stream(payload)
+        end_stream(response, payload)
       else
         case GRPC.Client.ReplyDecoder.decode(response.codec, payload, response.response_mod) do
           {:ok, reply} -> {:message, reply}
@@ -165,7 +165,7 @@ defmodule GRPC.Client.Connect.Response do
   defp decompress_envelope(_response, _flag, payload), do: {:ok, payload}
 
   # The last envelope: the error of the call, if any, and the trailing metadata.
-  defp end_stream(payload) do
+  defp end_stream(response, payload) do
     case Jason.decode(payload) do
       {:ok, %{} = json} ->
         trailers = end_metadata(json["metadata"])
@@ -177,7 +177,14 @@ defmodule GRPC.Client.Connect.Response do
 
           %{} = error_json ->
             error = error(error_json, GRPC.Status.unknown())
-            {:end_stream, items ++ [{:error, %{error | trailers: trailers}}]}
+
+            error = %{
+              error
+              | headers: response_headers(response, response.headers),
+                trailers: trailers
+            }
+
+            {:end_stream, items ++ [{:error, error}]}
 
           _ ->
             {:error, bad_end_stream()}

@@ -185,6 +185,34 @@ defmodule GRPC.Client.Adapters.GunTest do
 
       wait_for_unregistered({ConnectionProcess, {stalled.ref, stalled.host, stalled.port}})
     end
+
+    # Gun exits with `badarg` when the connect fails with `eaddrnotavail` (out of local
+    # ports, or port 0 here). When that happens before the caller asks for the result, the
+    # caller still gets the reason instead of `:noproc`.
+    @tag :capture_log
+    test "a connect that fails before the caller waits for it still reports why" do
+      channel = build(:channel, host: "127.0.0.1", port: 0)
+      open_opts = %{retry: 0, transport: :tcp, protocols: [:http2]}
+
+      {:ok, pid} = GenServer.start(ConnectionProcess, {channel, open_opts})
+      ref = Process.monitor(pid)
+      # Gun fails at once, well before this.
+      Process.sleep(200)
+
+      assert {:error, {:down, :badarg}} = GenServer.call(pid, :await_up)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
+    end
+
+    @tag :capture_log
+    test "a failed connect nobody waits for ends after the await timeout" do
+      channel = build(:channel, host: "127.0.0.1", port: 0)
+      open_opts = %{retry: 0, transport: :tcp, protocols: [:http2], await_timeout: 300}
+
+      {:ok, pid} = GenServer.start(ConnectionProcess, {channel, open_opts})
+      ref = Process.monitor(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1_000
+    end
   end
 
   # The connection process replies to waiters before it stops, and Registry

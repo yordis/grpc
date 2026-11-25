@@ -225,6 +225,7 @@ if Code.ensure_loaded?(:gun) do
              generation: 0,
              max_concurrent_streams: :unknown,
              status: :connecting,
+             failure: nil,
              waiters: [],
              await_timer: Process.send_after(self(), :await_up_timeout, await_timeout)
            }}
@@ -242,6 +243,11 @@ if Code.ensure_loaded?(:gun) do
 
     def handle_call(:await_up, from, %{status: :connecting} = state) do
       {:noreply, %{state | waiters: [from | state.waiters]}}
+    end
+
+    def handle_call(:await_up, _from, %{status: :failed} = state) do
+      Process.cancel_timer(state.await_timer)
+      {:stop, :normal, {:error, state.failure}, %{state | await_timer: nil}}
     end
 
     def handle_call({:give_up, tag}, _from, state),
@@ -370,6 +376,8 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp do_info(:await_up_timeout, state), do: {:noreply, state}
+
+    defp do_info(:failure_expired, %{status: :failed} = state), do: {:stop, :normal, state}
 
     defp do_info({:gun_up, _gun_pid, proto}, state)
          when proto == :http2 or
@@ -785,6 +793,14 @@ if Code.ensure_loaded?(:gun) do
 
     # Stops with `:normal` so `GRPC.Client.Supervisor` doesn't log every failed
     # connect; the reason reaches callers through the waiter replies.
+    # Gun can fail before the caller that started this process asks for the result. The
+    # reason is kept for it until the await timeout, or it would only see the process gone.
+    defp fail_connect(%{waiters: []} = state, reason) do
+      timer = Process.send_after(self(), :failure_expired, state.await_timeout)
+
+      {:noreply, %{state | status: :failed, failure: reason, gun_pid: nil, await_timer: timer}}
+    end
+
     defp fail_connect(state, reason) do
       reply_waiters(state, {:error, reason})
       {:stop, :normal, %{state | status: :failed, waiters: []}}

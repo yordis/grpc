@@ -42,8 +42,30 @@ defmodule GRPC.Client.GrpcWeb.ResponseTest do
           :done
         ])
 
-      assert [{:error, %GRPC.RPCError{status: 10, message: "aborted", trailers: trailers}}] = items
+      assert [
+               {:error,
+                %GRPC.RPCError{status: 10, message: "aborted", headers: headers, trailers: trailers}}
+             ] = items
+
       assert trailers["x-custom-trailer"] == "t"
+      assert headers == trailers
+    end
+
+    test "that succeeded is both the headers and the trailers" do
+      {_response, items, :ok} =
+        feed(response(), [
+          {:status, 200},
+          {:headers,
+           [
+             {"content-type", "application/grpc-web+proto"},
+             {"grpc-status", "0"},
+             {"x-custom-trailer", "t"}
+           ]},
+          :done
+        ])
+
+      assert [{:headers, %{"x-custom-trailer" => "t"} = headers}, {:trailers, trailers}] = items
+      assert headers == trailers
     end
 
     test "is the error in the headers when an empty data frame ends the response" do

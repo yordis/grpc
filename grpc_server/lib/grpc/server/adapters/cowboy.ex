@@ -286,7 +286,15 @@ defmodule GRPC.Server.Adapters.Cowboy do
           env: %{dispatch: {:persistent_term, dispatch_key}},
           idle_timeout: idle_timeout,
           inactivity_timeout: idle_timeout,
+          # For HTTP/1.1: how long a connection waits for its next request. Cowboy closes
+          # it after 5 seconds by default, when a client may be about to reuse it.
+          request_timeout: idle_timeout,
           settings_timeout: idle_timeout,
+          # The flow requested up front is the initial window, and the windows are never
+          # topped up beyond the flow requested, so a client cannot send a stream more
+          # than the connection counts for it.
+          stream_window_margin_size: 0,
+          connection_window_margin_size: 0,
           stream_handlers: [:grpc_stream_h],
           # The default option is small
           # https://github.com/ninenines/cowboy/issues/1398

@@ -63,29 +63,40 @@ if Code.ensure_loaded?(Jason) do
     end
 
     @doc """
-    Decodes binary data into a map using the Jason library.
-    Parameters:
+    Decodes JSON into a message.
 
-        binary - The binary data to be decoded.
-        module - Module to be created.
+    Given a Protobuf message module, it gives the struct of that module, read with
+    the canonical Protobuf JSON mapping (`Protobuf.JSON.decode!/2`). An empty binary
+    is the empty message. For any other `module`, such as `nil`, it gives a map
+    with string keys, as `Jason.decode!/1` does, and `%{}` for an empty binary.
 
-    Returns:
+    Raises if the binary is not valid JSON for the message.
 
-    A map representing the decoded data.
-
-    Raises:
-
-    Raises an error if the Jason library is not loaded.
-
-    Example:
+    ## Examples
 
     ```elixir
-    binary_data |> GRPC.Codec.JSON.decode(__MODULE__)
+    GRPC.Codec.JSON.decode(~s({"name": "John"}), MyStruct)
+    #=> %MyStruct{name: "John"}
+
+    GRPC.Codec.JSON.decode(~s({"name": "John"}), nil)
+    #=> %{"name" => "John"}
     ```
     """
-    def decode(<<>>, _module), do: %{}
+    def decode(binary, module) do
+      if message_module?(module), do: decode_message(binary, module), else: decode_map(binary)
+    end
 
-    def decode(binary, _module), do: Jason.decode!(binary)
+    defp decode_message(<<>>, module), do: Protobuf.JSON.decode!("{}", module)
+    defp decode_message(binary, module), do: Protobuf.JSON.decode!(binary, module)
+
+    defp decode_map(<<>>), do: %{}
+    defp decode_map(binary), do: Jason.decode!(binary)
+
+    defp message_module?(module) when is_atom(module) and not is_nil(module) do
+      Code.ensure_loaded?(module) and function_exported?(module, :__message_props__, 0)
+    end
+
+    defp message_module?(_module), do: false
   end
 else
   defmodule GRPC.Codec.JSON do

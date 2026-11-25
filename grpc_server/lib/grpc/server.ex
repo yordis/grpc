@@ -112,6 +112,7 @@ defmodule GRPC.Server do
   """
 
   alias GRPC.RPCError
+  alias GRPC.Server.Connect
   alias GRPC.Server.Router
   alias GRPC.Server.Transcode
 
@@ -189,6 +190,23 @@ defmodule GRPC.Server do
             unquote(Macro.escape(rpc)),
             unquote(func_name)
           )
+        end
+
+        # A Connect client may GET a method that is marked as free of side effects.
+        if Map.get(options, :idempotency_level) == :NO_SIDE_EFFECTS do
+          def __call_rpc__(unquote(path), :get, %{access_mode: :connectrpc} = stream) do
+            GRPC.Server.call(
+              unquote(service_mod),
+              %{
+                stream
+                | service_name: unquote(service_name),
+                  method_name: unquote(to_string(name)),
+                  grpc_type: unquote(grpc_type)
+              },
+              unquote(Macro.escape(rpc)),
+              unquote(func_name)
+            )
+          end
         end
 
         if http_transcode and Map.has_key?(options, :http) do
@@ -297,6 +315,30 @@ defmodule GRPC.Server do
     end
   end
 
+  defp do_handle_request(
+         false,
+         res_stream,
+         %{
+           request_mod: req_mod,
+           codec: codec,
+           adapter: adapter,
+           payload: payload,
+           access_mode: :connectrpc
+         } = stream,
+         func_name
+       ) do
+    if Connect.streaming?(stream) do
+      {:ok, data} = adapter.read_body(payload)
+      handle_enveloped_request(res_stream, stream, data, func_name)
+    else
+      with {:ok, data} <- connect_unary_body(stream),
+           {:ok, data} <- decompress_connect_request(stream, data),
+           {:ok, request} <- decode_connect_request(codec, data, req_mod) do
+        call_with_interceptors(res_stream, func_name, stream, request)
+      end
+    end
+  end
+
   defp do_handle_request(false, res_stream, %{is_preflight?: true} = stream, func_name) do
     call_with_interceptors(res_stream, func_name, stream, [])
   end
@@ -304,16 +346,11 @@ defmodule GRPC.Server do
   defp do_handle_request(
          false,
          res_stream,
-         %{request_mod: req_mod, codec: codec, adapter: adapter, payload: payload} = stream,
+         %{adapter: adapter, payload: payload} = stream,
          func_name
        ) do
     {:ok, data} = adapter.read_body(payload)
-
-    with {:ok, body} <- unpack_body(codec, data),
-         {:ok, message} <- validate_message(stream, body),
-         {:ok, request} <- decode_request(codec, message, req_mod) do
-      call_with_interceptors(res_stream, func_name, stream, request)
-    end
+    handle_enveloped_request(res_stream, stream, data, func_name)
   end
 
   # Transcoding maps one request message from the path, query and body. A request
@@ -338,6 +375,35 @@ defmodule GRPC.Server do
 
     call_with_interceptors(res_stream, func_name, stream, reading_stream)
   end
+
+  # One request message in an envelope, the form of gRPC and of Connect streams.
+  defp handle_enveloped_request(
+         res_stream,
+         %{request_mod: req_mod, codec: codec} = stream,
+         data,
+         func_name
+       ) do
+    with {:ok, body} <- unpack_body(codec, data),
+         {:ok, message} <- validate_message(stream, body),
+         :ok <- check_decompressed_length(message),
+         {:ok, request} <- decode_enveloped(stream, codec, message, req_mod) do
+      call_with_interceptors(res_stream, func_name, stream, request)
+    end
+  end
+
+  # The limit is for a message as it travels, and for it once decompressed.
+  defp check_decompressed_length(message) do
+    case message_too_large(byte_size(message)) do
+      nil -> :ok
+      error -> {:error, error}
+    end
+  end
+
+  # A Connect client's message that does not parse is its own error.
+  defp decode_enveloped(%{access_mode: :connectrpc}, codec, data, req_mod),
+    do: decode_connect_request(codec, data, req_mod)
+
+  defp decode_enveloped(_stream, codec, data, req_mod), do: decode_request(codec, data, req_mod)
 
   defp unpack_body(codec, data) do
     if function_exported?(codec, :unpack_from_channel, 1) do
@@ -377,8 +443,35 @@ defmodule GRPC.Server do
     error -> {:error, internal_error("Could not decode the request message: ", error)}
   end
 
+  # The limit applies to the body as sent and as decompressed.
+  defp decompress_connect_request(%{compressor: compressor}, data) do
+    with nil <- message_too_large(byte_size(data)),
+         data = if(compressor, do: compressor.decompress(data), else: data),
+         nil <- message_too_large(byte_size(data)) do
+      {:ok, data}
+    else
+      %RPCError{} = error -> {:error, error}
+    end
+  rescue
+    error in RPCError -> {:error, error}
+    error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}
+  end
+
+  # A unary call sends its message in the body, or in the query of a GET.
+  defp connect_unary_body(%{http_method: :get, adapter: adapter, payload: payload}) do
+    payload |> adapter.get_qs() |> Connect.get_message()
+  end
+
+  defp connect_unary_body(%{adapter: adapter, payload: payload}), do: adapter.read_body(payload)
+
+  defp decode_connect_request(codec, data, req_mod) do
+    {:ok, codec.decode(data, req_mod)}
+  rescue
+    error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}
+  end
+
   defp decode_stream_message!(%{codec: codec, request_mod: req_mod} = stream, flag, message) do
-    case decode_request(codec, decompress!(stream, flag, message), req_mod) do
+    case decode_enveloped(stream, codec, decompress!(stream, flag, message), req_mod) do
       {:ok, request} -> request
       {:error, error} -> raise error
     end
@@ -390,7 +483,9 @@ defmodule GRPC.Server do
     do: raise_internal!("The compressed flag is set, but grpc-encoding names no compressor")
 
   defp decompress!(%{compressor: compressor}, 1, message) do
-    compressor.decompress(message)
+    message = compressor.decompress(message)
+    check_message_length!(message)
+    message
   rescue
     error in RPCError -> reraise error, __STACKTRACE__
     error -> raise internal_error("Could not decompress the request message: ", error)
@@ -416,6 +511,13 @@ defmodule GRPC.Server do
     Application.get_env(:grpc, :max_message_length, Bitwise.bsl(1, 31))
   end
 
+  # The limit of a message the server sends: `:max_send_message_length`, or the limit of
+  # what it receives when that is not set.
+  @doc false
+  def max_send_message_length do
+    Application.get_env(:grpc, :max_send_message_length, max_message_length())
+  end
+
   defp check_message_length!(message) do
     if error = message_too_large(byte_size(message)), do: raise(error)
   end
@@ -435,8 +537,10 @@ defmodule GRPC.Server do
   end
 
   # A body the codec can't parse is the client's error, not the server's.
-  defp decode_transcoded_body(codec, data, req_mod) do
-    {:ok, codec.decode(data, req_mod)}
+  # Transcoding maps the body into the request by path, so it needs the JSON as a map,
+  # not as the message `req_mod`.
+  defp decode_transcoded_body(codec, data, _req_mod) do
+    {:ok, codec.decode(data, nil)}
   rescue
     error -> {:error, RPCError.exception(:invalid_argument, Exception.message(error))}
   end

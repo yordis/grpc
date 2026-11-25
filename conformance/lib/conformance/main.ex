@@ -40,6 +40,10 @@ defmodule Conformance.Main do
       limit -> Application.put_env(:grpc, :max_message_length, limit)
     end
 
+    # The limit is for what the server receives. A reply, such as an echo with fields
+    # added, is not bound by it.
+    Application.put_env(:grpc, :max_send_message_length, Bitwise.bsl(1, 32) - 1)
+
     {opts, pem_cert} = tls_opts(request)
 
     {:ok, _pid, port} =

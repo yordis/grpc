@@ -413,7 +413,8 @@ defmodule Connectrpc.Conformance.V1.ConformanceService.Service do
   rpc(
     :IdempotentUnary,
     Connectrpc.Conformance.V1.IdempotentUnaryRequest,
-    Connectrpc.Conformance.V1.IdempotentUnaryResponse
+    Connectrpc.Conformance.V1.IdempotentUnaryResponse,
+    %{idempotency_level: :NO_SIDE_EFFECTS}
   )
 end
 

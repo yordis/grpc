@@ -6,6 +6,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   alias GRPC.Server.Adapters.ReportException
   alias GRPC.Transport.HTTP2
   alias GRPC.RPCError
+  alias GRPC.Server.Adapters.Cowboy.ConnectResponse
   require Logger
 
   @behaviour :cowboy_loop
@@ -37,7 +38,8 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, opts),
          {:ok, codec} <- find_codec(sub_type, content_type, server),
-         {:ok, compressor} <- find_compressor(req, server) do
+         :ok <- check_connect_get(req, server, route, access_mode),
+         {:ok, compressor} <- find_compressor(req, server, access_mode) do
       stream_pid = self()
       started_at = System.monotonic_time()
       http_transcode = access_mode == :http_transcoding
@@ -45,11 +47,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
       # Decode the inbound deadline ONCE, before building the stream, so it can be
       # surfaced to interceptors/handlers and reused for the cancellation timer.
-      timeout_ms =
-        case Map.get(request_headers, "grpc-timeout") do
-          t when is_binary(t) -> GRPC.Transport.Utils.decode_timeout(t)
-          _ -> nil
-        end
+      timeout_ms = request_timeout_ms(access_mode, request_headers)
 
       deadline = timeout_ms && System.monotonic_time(:millisecond) + timeout_ms
 
@@ -104,15 +102,52 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         }
       }
     else
+      {:error, {:connect, status, headers, error}} ->
+        # Only a Connect client reads a JSON error body; a gRPC client takes the status alone.
+        req =
+          if status == 415 and :cowboy_req.header("connect-protocol-version", req) == :undefined do
+            :cowboy_req.reply(415, headers, req)
+          else
+            ConnectResponse.reply_error(req, status, headers, error)
+          end
+
+        {:ok, req, state}
+
       {:error, error} ->
         Logger.error(fn -> inspect(error) end)
         trailers = HTTP2.server_trailers(error.status, error.message)
+        req = :cowboy_req.set_resp_headers(error_content_type(req), req)
         req = send_error_trailers(req, 200, trailers, state)
         {:ok, req, state}
     end
   end
 
+  # A gRPC client reads the status of a call that failed before it started only from a
+  # response whose content type is its own.
+  defp error_content_type(req) do
+    case :cowboy_req.header("content-type", req) do
+      "application/grpc" <> _ = content_type -> %{"content-type" => content_type}
+      _ -> %{"content-type" => "application/grpc"}
+    end
+  end
+
   # A gRPC-Web response echoes a grpc-web content-type, never application/grpc.
+  defp request_timeout_ms(:connectrpc, headers) do
+    with t when is_binary(t) <- Map.get(headers, "connect-timeout-ms"),
+         {ms, ""} when ms >= 0 <- Integer.parse(t) do
+      ms
+    else
+      _ -> nil
+    end
+  end
+
+  defp request_timeout_ms(_access_mode, headers) do
+    case Map.get(headers, "grpc-timeout") do
+      t when is_binary(t) -> GRPC.Transport.Utils.decode_timeout(t)
+      _ -> nil
+    end
+  end
+
   defp response_headers(%{access_mode: :grpcweb, codec: codec} = stream) do
     case HTTP2.server_headers(stream) do
       %{"content-type" => "application/grpc-web" <> _} = headers ->
@@ -122,6 +157,24 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         Map.put(headers, "content-type", "application/grpc-web+#{codec.name()}")
     end
   end
+
+  defp response_headers(%{access_mode: :connectrpc, codec: codec} = stream) do
+    streaming? = GRPC.Server.Connect.streaming?(stream)
+    headers = %{"content-type" => GRPC.Server.Connect.content_type(streaming?, codec.name())}
+
+    case streaming? && GRPC.Server.Connect.response_compressor(stream) do
+      compressor when compressor not in [nil, false] ->
+        Map.put(headers, "connect-content-encoding", compressor.name())
+
+      _ ->
+        headers
+    end
+  end
+
+  # A gRPC response names gRPC in its content type, whatever the codec. Only a transcoded
+  # response is plain `application/json`.
+  defp response_headers(%{access_mode: :grpc, codec: codec}),
+    do: %{"content-type" => "application/grpc+#{codec.name()}"}
 
   defp response_headers(stream), do: HTTP2.server_headers(stream)
 
@@ -177,7 +230,46 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     access_mode = resolve_access_mode(req, access_mode, subtype)
     {access_mode, subtype} = pin_transcoded_route(opts, req, access_mode, subtype)
-    {:ok, access_mode, subtype, content_type}
+    {access_mode, subtype} = detect_connect(opts, req, content_type, access_mode, subtype)
+
+    cond do
+      wrong_connect_method?(opts, req, content_type) ->
+        {:error,
+         {:connect, 405, %{"allow" => "POST"},
+          RPCError.exception(
+            status: :unknown,
+            message: "method #{:cowboy_req.method(req)} is not allowed"
+          )}}
+
+      unsupported_connect_content_type?(opts, req, content_type, access_mode) ->
+        {:error,
+         {:connect, 415, %{"accept-post" => "application/json, application/proto"},
+          RPCError.exception(
+            status: :unknown,
+            message: "unsupported content-type #{inspect(content_type)}"
+          )}}
+
+      true ->
+        {:ok, access_mode, subtype, content_type}
+    end
+  end
+
+  # Connect calls are POST, or GET for a method without side effects.
+  defp wrong_connect_method?(%{http_transcode_route: true}, _req, _content_type), do: false
+
+  defp wrong_connect_method?(_opts, req, content_type) do
+    extract_http_method(req) not in [:post, :get, :options] and
+      GRPC.Server.Connect.parse_content_type(content_type) != :error
+  end
+
+  # A POST whose content type is neither gRPC's nor Connect's: HTTP 415.
+  defp unsupported_connect_content_type?(%{http_transcode_route: true}, _, _, _), do: false
+
+  defp unsupported_connect_content_type?(_opts, req, content_type, access_mode) do
+    access_mode != :connectrpc and extract_http_method(req) == :post and
+      is_binary(content_type) and
+      GRPC.Server.Connect.parse_content_type(content_type) == :error and
+      not String.starts_with?(content_type, "application/grpc")
   end
 
   # A route from an HttpRule is always transcoded, whatever the Content-Type says.
@@ -189,6 +281,62 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   end
 
   defp pin_transcoded_route(_opts, _req, access_mode, subtype), do: {access_mode, subtype}
+
+  # A request that names a Connect content type is a Connect call, unless the route comes
+  # from an HttpRule, which is always transcoded.
+  defp detect_connect(%{http_transcode_route: true}, _req, _content_type, access_mode, subtype),
+    do: {access_mode, subtype}
+
+  defp detect_connect(_opts, req, content_type, access_mode, subtype) do
+    with false <- preflight?(req),
+         {:ok, codec_name} <- connect_codec(req, content_type) do
+      {:connectrpc, codec_name}
+    else
+      _ -> {access_mode, subtype}
+    end
+  end
+
+  # A POST names the codec in its content type, a GET in the `encoding` of its query.
+  defp connect_codec(req, content_type) do
+    case extract_http_method(req) do
+      :post ->
+        case GRPC.Server.Connect.parse_content_type(content_type) do
+          {_kind, codec_name} -> {:ok, codec_name}
+          :error -> :error
+        end
+
+      :get ->
+        case GRPC.Server.Connect.parse_get_query(:cowboy_req.qs(req)) do
+          {:ok, %{"encoding" => codec_name}} -> {:ok, codec_name}
+          :error -> :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  # Only a method marked as free of side effects answers a GET.
+  defp check_connect_get(req, server, route, :connectrpc) do
+    if extract_http_method(req) == :get and not get_allowed?(server, route) do
+      {:error,
+       {:connect, 405, %{"allow" => "POST"},
+        RPCError.exception(status: :unknown, message: "method GET is not allowed")}}
+    else
+      :ok
+    end
+  end
+
+  defp check_connect_get(_req, _server, _route, _access_mode), do: :ok
+
+  defp get_allowed?(server, route) do
+    service = server.__meta__(:service)
+
+    Enum.any?(service.__rpc_calls__(), fn {name, _, _, options} ->
+      "/#{service.__meta__(:name)}/#{name}" == route and
+        Map.get(options, :idempotency_level) == :NO_SIDE_EFFECTS
+    end)
+  end
 
   defp extract_http_method(req) do
     case :cowboy_req.method(req) do
@@ -203,10 +351,62 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
+  # Connect names the request compression in `Content-Encoding` for a unary call, and in
+  # `Connect-Content-Encoding` for a stream.
+  defp find_compressor(req, server, :connectrpc) do
+    encoding =
+      if extract_http_method(req) == :get do
+        {:ok, params} = GRPC.Server.Connect.parse_get_query(:cowboy_req.qs(req))
+        Map.get(params, "compression", :undefined)
+      else
+        connect_content_encoding(req)
+      end
+
+    find_connect_compressor(encoding, server)
+  end
+
+  defp find_compressor(req, server, _access_mode), do: find_compressor(req, server)
+
+  defp connect_content_encoding(req) do
+    header =
+      if stream_content_type?(req), do: "connect-content-encoding", else: "content-encoding"
+
+    :cowboy_req.header(header, req)
+  end
+
+  defp find_connect_compressor(encoding, server) do
+    case encoding do
+      encoding when encoding in [:undefined, "identity"] ->
+        {:ok, nil}
+
+      encoding ->
+        case Enum.find(server.__meta__(:compressors), &(&1.name() == encoding)) do
+          nil ->
+            {:error,
+             {:connect, 501, %{},
+              RPCError.exception(
+                status: :unimplemented,
+                message: "unknown compression #{inspect(encoding)}"
+              )}}
+
+          compressor ->
+            {:ok, compressor}
+        end
+    end
+  end
+
+
+  defp stream_content_type?(req) do
+    match?(
+      {:stream, _},
+      GRPC.Server.Connect.parse_content_type(:cowboy_req.header("content-type", req))
+    )
+  end
+
   defp find_compressor(req, server) do
     encoding = :cowboy_req.header("grpc-encoding", req)
 
-    if is_binary(encoding) do
+    if is_binary(encoding) and encoding != "identity" do
       compressor = Enum.find(server.__meta__(:compressors), nil, fn c -> c.name() == encoding end)
 
       if compressor do
@@ -409,7 +609,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   # APIs end
 
   def info({:read_full_body, ref, pid}, req, state) do
-    limits = %{max_bytes: state.max_body_size, check_prefix?: state.access_mode == :grpc}
+    limits = %{max_bytes: state.max_body_size, check_prefix?: framed?(state)}
     {s, body, req} = read_full_body(req, [], 0, state[:handling_timer], limits)
     send(pid, {ref, {s, body}})
     {:ok, req, state}
@@ -457,10 +657,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         {:ok, req, %{s | pending_reader: nil}}
 
       {:too_large, total} ->
-        body_too_large(req, s, total)
+        body_too_large(req, %{s | pending_reader: nil}, total)
 
       {:message_too_large, error} ->
-        message_too_large(req, s, error)
+        message_too_large(req, %{s | pending_reader: nil}, error)
     end
   end
 
@@ -484,10 +684,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
         {:ok, req, s}
 
       {:too_large, total} ->
-        body_too_large(req, s, total)
+        body_too_large(req, %{s | pending_reader: nil}, total)
 
       {:message_too_large, error} ->
-        message_too_large(req, s, error)
+        message_too_large(req, %{s | pending_reader: nil}, error)
     end
   end
 
@@ -536,6 +736,17 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     {:ok, req, state}
   end
 
+  def info({:stream_body, data, opts, is_fin, _}, req, %{access_mode: :connectrpc} = state) do
+    case ConnectResponse.stream_body(data, opts, is_fin, req, state) do
+      {:error, %RPCError{} = error} ->
+        publish_send_error(state, error)
+        {:stop, send_error(req, error, state, :rpc_error), state}
+
+      result ->
+        result
+    end
+  end
+
   def info({:stream_body, data, opts, is_fin, _}, req, state) do
     # If compressor exists, compress is true by default
     compressor =
@@ -564,7 +775,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
       {:stop, req, state}
     else
-      max_length = GRPC.Server.max_message_length()
+      max_length = GRPC.Server.max_send_message_length()
 
       to_data_opts = [
         compressor: compressor,
@@ -606,6 +817,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
       {:stop, req, state}
   end
 
+  def info({:stream_reply, status, headers}, req, %{access_mode: :connectrpc} = state) do
+    ConnectResponse.stream_reply(status, headers, req, state)
+  end
+
   def info({:stream_reply, status, headers}, req, state) do
     req = :cowboy_req.stream_reply(status, headers, req)
     {:ok, req, state}
@@ -618,6 +833,10 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   def info({:set_resp_trailers, trailers}, req, state) do
     {:ok, req, Map.put(state, :resp_trailers, trailers)}
+  end
+
+  def info({:stream_trailers, _trailers}, req, %{access_mode: :connectrpc} = state) do
+    ConnectResponse.stream_trailers(req, state)
   end
 
   def info({:stream_trailers, trailers}, req, state) do
@@ -697,13 +916,67 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     {:stop, req, state}
   end
 
-  def terminate(reason, _req, state = %{pid: _pid}) do
+  def terminate(reason, req, state = %{pid: _pid}) do
     abort_rpc(state, reason)
+    drain_request_body(req, state)
     :ok
   end
 
-  def terminate(_reason, _req, _state) do
+  def terminate(_reason, req, state) do
+    drain_request_body(req, state)
     :ok
+  end
+
+  # Cowboy drops an HTTP/1.1 connection when a request ends with its body unfinished and
+  # of unknown length (chunked, as a streaming client sends it). The client may be about
+  # to reuse the connection, and fails with "server closed idle connection", so what is
+  # left of the body is read, within a bound of bytes and of time.
+  @drain_max_bytes 1_000_000
+  @drain_max_time 1_000
+
+  defp drain_request_body(
+         %{version: :"HTTP/1.1", has_body: true, body_length: :undefined} = req,
+         state
+       ) do
+    deadline = System.monotonic_time(:millisecond) + @drain_max_time
+
+    case is_map(state) && Map.get(state, :pending_reader) do
+      # Cowboy serves one read at a time, so the one in flight is awaited first.
+      {read_ref, _pid, _ref} ->
+        receive do
+          {:request_body, ^read_ref, :fin, _length, _body} ->
+            :ok
+
+          {:request_body, ^read_ref, :nofin, body} ->
+            do_drain_request_body(req, byte_size(body), deadline)
+        after
+          @drain_max_time -> :ok
+        end
+
+      _none ->
+        do_drain_request_body(req, 0, deadline)
+    end
+  end
+
+  defp drain_request_body(_req, _state), do: :ok
+
+  defp do_drain_request_body(req, drained, deadline) do
+    left = deadline - System.monotonic_time(:millisecond)
+
+    if drained > @drain_max_bytes or left <= 0 do
+      :ok
+    else
+      case :cowboy_req.read_body(req, %{length: 64_000, period: left}) do
+        {:ok, _data, _req} ->
+          :ok
+
+        {:more, data, req} ->
+          do_drain_request_body(req, drained + byte_size(data), deadline)
+      end
+    end
+  catch
+    # The stream is gone already, or the client sends no more.
+    _, _ -> :ok
   end
 
   def call_rpc(server, path, stream) do
@@ -813,9 +1086,18 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
-  # Only gRPC bodies are framed; transcoded JSON and gRPC-web text are not.
-  defp scan_frames(%{access_mode: :grpc} = state, data), do: do_scan_frames(state, data)
-  defp scan_frames(state, _data), do: {:ok, state}
+  # Only gRPC and Connect stream bodies are framed; transcoded JSON, Connect unary bodies
+  # and gRPC-web text are not.
+  defp framed?(%{access_mode: :grpc}), do: true
+
+  defp framed?(%{access_mode: :connectrpc, stream: stream}),
+    do: GRPC.Server.Connect.streaming?(stream)
+
+  defp framed?(_state), do: false
+
+  defp scan_frames(state, data) do
+    if framed?(state), do: do_scan_frames(state, data), else: {:ok, state}
+  end
 
   defp do_scan_frames(state, <<>>), do: {:ok, state}
 
@@ -845,7 +1127,11 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   # Asks cowboy for a chunk as soon as the next length prefix can be complete, or the
   # current message and the next prefix are in, so each prefix is checked early. With
   # cowboy's default of 8 MB, a chunk comes only after 8 MB or 15 s.
-  defp read_length_opt(%{access_mode: :grpc} = state, opts) do
+  defp read_length_opt(state, opts) do
+    if framed?(state), do: put_read_length(state, opts), else: opts
+  end
+
+  defp put_read_length(state, opts) do
     length =
       case state.frame_remaining do
         0 -> 5 - byte_size(state.frame_prefix)
@@ -854,8 +1140,6 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     Map.put(opts, :length, length)
   end
-
-  defp read_length_opt(_state, opts), do: opts
 
   defp message_too_large(req, state, error) do
     req = send_error(req, error, state, :message_too_large)
@@ -1078,6 +1362,11 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   defp preflight?(%{method: "OPTIONS"}), do: true
   defp preflight?(_), do: false
+
+  defp send_error(req, error, %{access_mode: :connectrpc} = state, reason) do
+    abort_rpc(state, reason)
+    ConnectResponse.send_error(req, error, state)
+  end
 
   defp send_error(req, error, state, reason) do
     custom_trailers =

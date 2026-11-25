@@ -28,7 +28,7 @@ defmodule GRPC.Integration.ConnectClientUnaryTest do
     channel
   end
 
-  for protocols <- [[:http2]] do
+  for protocols <- [[:http2], [:http1]] do
     describe "a unary Connect call over #{inspect(protocols)}" do
       @describetag protocols: protocols
 
@@ -48,6 +48,15 @@ defmodule GRPC.Integration.ConnectClientUnaryTest do
           assert headers["content-type"] == "application/proto"
           assert trailers["x-custom-trailer"] == "from-server-trailer"
           refute Map.has_key?(headers, "trailer-x-custom-trailer")
+        end)
+      end
+
+      test "returns the error of the server", %{protocols: protocols} do
+        run_server(HelloServer, fn port ->
+          channel = connect(port, adapter_opts: [protocols: protocols])
+
+          assert {:error, %GRPC.RPCError{status: 5, message: "no such greeting"}} =
+                   Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{name: "fail"})
         end)
       end
     end

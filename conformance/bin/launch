@@ -1,0 +1,23 @@
+#!/bin/sh
+# Runs an Elixir expression against the compiled build without Mix. `mix run` holds the
+# build directory lock for as long as the program lives, so the runner's many clients and
+# servers, or two runs from one build, would wait for one another. Run
+# `mix deps.get && mix compile` first (run.sh does this).
+# Usage: bin/launch <expression>   (CONFORMANCE_ENV selects the build, default dev)
+set -e
+here="$(cd "$(dirname "$0")/.." && pwd)"
+build="$here/_build/${CONFORMANCE_ENV:-dev}/lib"
+[ -d "$build" ] || { echo "no build in $build (run mix compile)" >&2; exit 2; }
+
+# stdout carries the runner protocol, so all logs go to stderr (config/config.exs does the
+# same under Mix, which this launcher does not load).
+expr="
+:logger.update_handler_config(:default, :config, %{type: :standard_error})
+Logger.configure(level: :warning)
+{:ok, _} = Application.ensure_all_started(:conformance)
+$1
+"
+
+set --
+for ebin in "$build"/*/ebin; do set -- -pa "$ebin" "$@"; done
+exec elixir "$@" --no-halt -e "$expr"

@@ -25,6 +25,7 @@ defmodule Conformance.Client.Main do
 
       message ->
         request = ClientCompatRequest.decode(message)
+
         in_flight =
           if in_flight >= @max_in_flight,
             do: wait_for(@max_in_flight - 1, in_flight),

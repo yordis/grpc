@@ -58,7 +58,7 @@ defmodule Conformance.Main do
   defp tls_opts(%ServerCompatRequest{use_tls: false}), do: {[], <<>>}
 
   defp tls_opts(%ServerCompatRequest{server_creds: %{cert: cert, key: key}} = request) do
-    dir = Path.join(System.tmp_dir!(), "conformance-#{System.unique_integer([:positive])}")
+    dir = tls_dir()
     File.mkdir_p!(dir)
     certfile = Path.join(dir, "cert.pem")
     keyfile = Path.join(dir, "key.pem")
@@ -68,6 +68,15 @@ defmodule Conformance.Main do
 
     ssl = [certfile: certfile, keyfile: keyfile] ++ client_cert_opts(request.client_tls_cert)
     {[cred: GRPC.Credential.new(ssl: ssl)], cert}
+  end
+
+  # The runner starts several servers at once, each its own OS process, and a unique
+  # integer alone repeats across them: two servers shared a directory, and one loaded
+  # the other's certificate and key.
+  @doc false
+  def tls_dir do
+    name = "conformance-#{System.pid()}-#{System.unique_integer([:positive])}"
+    Path.join(System.tmp_dir!(), name)
   end
 
   defp client_cert_opts(<<>>), do: []

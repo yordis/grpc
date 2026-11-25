@@ -1,0 +1,11 @@
+#!/bin/sh
+# Runs a program and keeps what it exchanged with the runner, as evidence for any failure.
+# Usage: bin/capture <dir> <program> [args...]
+# Writes, per run of the program, <dir>/<time>.<pid>.in (bytes read from stdin), .out (bytes
+# written to stdout) and .err (stderr, with the start time, the end time and the exit status).
+dir="$1"; shift
+mkdir -p "$dir"
+base="$dir/$(date +%H%M%S).$$"
+printf '%s start: %s\n' "$(date +%T)" "$*" > "$base.err"
+{ tee "$base.in" | { "$@" 2>> "$base.err"; echo "$?" > "$base.status"; } | tee "$base.out"; } || true
+printf '%s end: status %s\n' "$(date +%T)" "$(cat "$base.status" 2>/dev/null)" >> "$base.err"

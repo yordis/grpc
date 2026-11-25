@@ -1,0 +1,33 @@
+#!/bin/sh
+# Runs an Elixir expression against the compiled build without Mix. `mix run` holds the
+# build directory lock for as long as the program lives, so the runner's many clients and
+# servers, or two runs from one build, would wait for one another. Run
+# `mix deps.get && mix compile` first (run.sh does this).
+# Usage: bin/launch <expression>
+# CONFORMANCE_BUILD names the lib directory to load (run.sh gives each run a private copy, so
+# a compile in the shared build cannot rewrite beams under a running program); otherwise
+# CONFORMANCE_ENV selects the shared build, default dev.
+set -e
+here="$(cd "$(dirname "$0")/.." && pwd)"
+build="${CONFORMANCE_BUILD:-$here/_build/${CONFORMANCE_ENV:-dev}/lib}"
+[ -d "$build" ] || { echo "no build in $build (run mix compile)" >&2; exit 2; }
+
+# stdout carries the runner protocol, and any text there is read as a message size. Move it
+# to stderr for the whole program (logs, IO.puts, crash reports) and hand the real stdout to
+# Conformance.Protocol as file descriptor 3.
+exec 3>&1 1>&2
+export CONFORMANCE_PROTOCOL_FD=3
+
+expr="
+Logger.configure(level: :warning)
+{:ok, _} = Application.ensure_all_started(:conformance)
+$1
+"
+
+set --
+for ebin in "$build"/*/ebin; do set -- -pa "$ebin" "$@"; done
+# -noinput keeps the VM from reading standard input itself. Left to it, the VM reads and
+# decodes the runner's first bytes as UTF-8 before any program can ask for them, so the
+# program reads them from file descriptor 0 (Conformance.Protocol) and gets nothing or
+# mangled bytes.
+exec elixir --erl "-noinput" "$@" --no-halt -e "$expr"

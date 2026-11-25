@@ -4,4 +4,4 @@
 # first (run.sh does this), since the runner starts many servers in parallel.
 set -e
 cd "$(dirname "$0")/.."
-exec mix run --no-compile --no-deps-check --no-halt -e 'Conformance.Main.run()'
+exec bin/launch 'Conformance.Main.run()'

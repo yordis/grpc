@@ -315,20 +315,6 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
-    # The call's timeout bounds a streaming call as a whole, as it does with Gun.
-    defp deadline_error({:error, :deadline_exceeded}, stream, pid) do
-      give_up_on_request(stream, pid)
-      GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :deadline)
-      {:error, GRPC.RPCError.exception(GRPC.Status.deadline_exceeded(), "deadline exceeded")}
-    end
-
-    defp deadline_error(response, _stream, _pid), do: response
-
-    defp call_timeout(%{payload: %{deadline: deadline}}) when is_integer(deadline),
-      do: {:deadline, deadline}
-
-    defp call_timeout(_stream), do: :infinity
-
     defp do_receive_data(
            %{payload: %{stream_response_pid: pid}} = stream,
            request_type,
@@ -462,6 +448,39 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     # A connection that has dropped, or was never there, is a transient condition
     # that should map to the gRPC UNAVAILABLE error status.
+    # The call's timeout bounds a streaming call as a whole, as it does with Gun.
+    defp deadline_error({:error, :deadline_exceeded}, stream, pid) do
+      give_up_on_request(stream, pid)
+      GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :deadline)
+      {:error, GRPC.RPCError.exception(GRPC.Status.deadline_exceeded(), "deadline exceeded")}
+    end
+
+    # A reset or a closed connection reaches the stream as the Mint error, which
+    # must not leak out of the client.
+    defp deadline_error(
+           {:error, %Mint.HTTPError{reason: {:server_closed_request, :cancel}} = error},
+           stream,
+           pid
+         ) do
+      if reset_at_deadline?(stream) do
+        deadline_error({:error, :deadline_exceeded}, stream, pid)
+      else
+        {:error, rpc_error({:error, error})}
+      end
+    end
+
+    defp deadline_error({:error, %mod{} = error}, _stream, _pid)
+         when mod in [Mint.HTTPError, Mint.TransportError] do
+      {:error, rpc_error({:error, error})}
+    end
+
+    defp deadline_error(response, _stream, _pid), do: response
+
+    defp call_timeout(%{payload: %{deadline: deadline}}) when is_integer(deadline),
+      do: {:deadline, deadline}
+
+    defp call_timeout(_stream), do: :infinity
+
     defp rpc_error({:error, %GRPC.RPCError{} = error}), do: error
 
     defp rpc_error({:error, %Mint.TransportError{} = error}) do

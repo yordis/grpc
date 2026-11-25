@@ -42,6 +42,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, server, opts),
          {:ok, codec} <- find_codec(sub_type, content_type, server),
          :ok <- check_connect_get(req, server, route, access_mode),
+         :ok <- check_connect_shape(req, server, route, access_mode, opts),
          {:ok, compressor} <- find_compressor(req, server, access_mode) do
       stream_pid = self()
       started_at = System.monotonic_time()
@@ -341,6 +342,31 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
   defp check_connect_get(_req, _server, _route, _access_mode), do: :ok
 
+  # A unary content type is for a unary method, a streaming one for a streaming method.
+  # A GET is always unary and is checked by `check_connect_get/4`.
+  defp check_connect_shape(req, server, route, :connectrpc, opts)
+       when not is_map_key(opts, :http_transcode_route) do
+    with :post <- extract_http_method(req),
+         {kind, _codec} <-
+           GRPC.Server.Connect.parse_content_type(:cowboy_req.header("content-type", req)),
+         grpc_type when not is_nil(grpc_type) <- rpc_grpc_type(server, route),
+         false <- (kind == :stream) == (grpc_type != :unary) do
+      {:error,
+       {:connect, 415, %{"accept-post" => accept_post(grpc_type)},
+        RPCError.exception(
+          status: :unknown,
+          message: "the content-type does not fit this method"
+        )}}
+    else
+      _ -> :ok
+    end
+  end
+
+  defp check_connect_shape(_req, _server, _route, _access_mode, _opts), do: :ok
+
+  defp accept_post(:unary), do: "application/json, application/proto"
+  defp accept_post(_), do: "application/connect+json, application/connect+proto"
+
   defp max_body_size(opts, server, route) do
     case Map.get(opts, :max_body_size) do
       nil -> if request_stream?(server, route), do: :infinity, else: @default_max_body_size
@@ -348,12 +374,14 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
-  defp request_stream?(server, route) do
+  defp request_stream?(server, route),
+    do: rpc_grpc_type(server, route) in [:client_stream, :bidirectional_stream]
+
+  defp rpc_grpc_type(server, route) do
     service = server.__meta__(:service)
 
-    Enum.any?(service.__rpc_calls__(), fn {name, _, _, _} = rpc ->
-      "/#{service.__meta__(:name)}/#{name}" == route and
-        GRPC.Service.grpc_type(rpc) in [:client_stream, :bidi_stream]
+    Enum.find_value(service.__rpc_calls__(), fn {name, _, _, _} = rpc ->
+      if "/#{service.__meta__(:name)}/#{name}" == route, do: GRPC.Service.grpc_type(rpc)
     end)
   end
 

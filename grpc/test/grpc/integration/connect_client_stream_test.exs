@@ -127,6 +127,21 @@ defmodule GRPC.Integration.ConnectClientStreamTest do
     end
   end
 
+  for protocols <- [[:http2], [:http1]] do
+    test "a client stream canceled before it is closed ends with canceled over #{inspect(protocols)}" do
+      run_server(FeatureServer, fn port ->
+        channel = connect(port, adapter_opts: [protocols: unquote(protocols)])
+
+        stream = Routeguide.RouteGuide.Stub.record_route(channel)
+        stream = GRPC.Stub.send_request(stream, %Routeguide.Point{})
+        stream = GRPC.Stub.cancel(stream)
+        stream = GRPC.Stub.end_stream(stream)
+
+        assert {:error, %GRPC.RPCError{status: 1}} = GRPC.Stub.recv(stream, timeout: 2000)
+      end)
+    end
+  end
+
   test "a bidi stream over HTTP/2 reads a reply before the request ends" do
     run_server(FeatureServer, fn port ->
       channel = connect(port, adapter_opts: [protocols: [:http2]])

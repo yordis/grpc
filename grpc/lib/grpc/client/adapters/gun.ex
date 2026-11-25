@@ -425,7 +425,7 @@ if Code.ensure_loaded?(:gun) do
 
       case connect_headers(state) do
         {:ok, headers, state} ->
-          replies = Stream.unfold(state, &connect_next/1)
+          replies = connect_replies(state)
 
           if opts[:return_headers],
             do: {:ok, replies, %{headers: headers}},
@@ -492,6 +492,35 @@ if Code.ensure_loaded?(:gun) do
         {:error, _} = error -> error
         state -> connect_headers(state)
       end
+    end
+
+    # The replies of a streaming call are read from the response once, however many times
+    # the caller enumerates them, as a caller does that reads a reply after each request of
+    # a bidi stream. The state of the read is in an agent, linked to the caller, that goes
+    # away with the last item.
+    defp connect_replies(state) do
+      {:ok, agent} = Agent.start_link(fn -> state end)
+      Stream.resource(fn -> agent end, &connect_take/1, fn _agent -> :ok end)
+    end
+
+    defp connect_take(agent) do
+      take = fn state ->
+        case connect_next(state) do
+          nil -> {:halt, state}
+          {item, state} -> {{:item, item}, state}
+        end
+      end
+
+      case Agent.get_and_update(agent, take, :infinity) do
+        {:item, item} ->
+          {[item], agent}
+
+        :halt ->
+          Agent.stop(agent)
+          {:halt, agent}
+      end
+    catch
+      :exit, _reason -> {:halt, agent}
     end
 
     # The next item of a streaming call. An error is the last one.

@@ -333,7 +333,17 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # that function raises for a message over `:max_message_length` or a gzip bomb.
   defp get_message(buffer, compressor) do
     with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer) do
-      GRPC.Message.get_message(buffer, compressor)
+      case GRPC.Message.get_message(buffer, compressor) do
+        {{1, _message}, _rest} when is_nil(compressor) ->
+          {:error,
+           GRPC.RPCError.exception(
+             status: :internal,
+             message: "Compressed flag is set, but not specified in headers."
+           )}
+
+        other ->
+          other
+      end
     end
   rescue
     error in GRPC.RPCError -> {:error, error}

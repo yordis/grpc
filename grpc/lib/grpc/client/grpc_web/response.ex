@@ -68,9 +68,24 @@ defmodule GRPC.Client.GrpcWeb.Response do
   def consume(%{headers: nil} = response, {:headers, headers}),
     do: {%{response | headers: headers}, [], :ok}
 
+  # HTTP trailers, which a server may send in place of the trailers envelope when the
+  # body is empty. They carry the `grpc-status`.
+  def consume(%{status: 200, ended: false, bad_content_type: nil} = response, {:headers, trailers}) do
+    decoded = HTTP2.decode_headers(trailers)
+
+    if response.body == <<>> and Map.has_key?(decoded, "grpc-status") do
+      {%{response | ended: true}, trailers_items(decoded, decoded_headers(response), false), :ok}
+    else
+      {response, [], :ok}
+    end
+  end
+
   def consume(response, {:headers, _trailers}), do: {response, [], :ok}
 
   def consume(%{ended: true} = response, {:data, _data}), do: {response, [], :ok}
+
+  # A server may end the response with an empty data frame.
+  def consume(response, {:data, <<>>}), do: {response, [], :ok}
 
   def consume(%{status: 200, bad_content_type: nil} = response, {:data, data}),
     do: drain(%{response | body: response.body <> data, data_seen: true}, [])
@@ -112,18 +127,17 @@ defmodule GRPC.Client.GrpcWeb.Response do
   defp http_error(response) do
     decoded = decoded_headers(response)
 
-    case status_error(decoded, nil) do
-      {:error, error} ->
-        error
+    if Map.has_key?(decoded, "grpc-status") do
+      {:error, error} = status_error(decoded, nil)
+      error
+    else
+      error =
+        GRPC.RPCError.exception(
+          HTTP2.status_from_http(response.status),
+          "status got is #{response.status} instead of 200"
+        )
 
-      _ ->
-        error =
-          GRPC.RPCError.exception(
-            HTTP2.status_from_http(response.status),
-            "status got is #{response.status} instead of 200"
-          )
-
-        %{error | headers: decoded, trailers: %{}}
+      %{error | headers: decoded, trailers: %{}}
     end
   end
 

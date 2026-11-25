@@ -65,6 +65,7 @@ if Code.ensure_loaded?(:gun) do
     @max_retries 100
     # Default of `:response_window`, in bytes.
     @default_response_window 1_048_576
+    @deadline_tolerance 1
     # One frame. A smaller window stalls a cowlib peer, which holds data back
     # while the stream window is under 16,384 bytes and the data does not fit.
     @min_response_window 16_384
@@ -350,7 +351,10 @@ if Code.ensure_loaded?(:gun) do
 
       case recv_headers(payload, deadline) do
         {:ok, headers, :fin} ->
-          handle_fin_response(headers, opts)
+          # Trailers only: a status OK means the call returned no message.
+          with :ok <- parse_trailers(headers, nil) do
+            {:error, no_response_error(nil, headers)}
+          end
 
         {:ok, headers, :nofin} ->
           handle_nofin_response(payload, stream, headers, opts, deadline)
@@ -362,7 +366,7 @@ if Code.ensure_loaded?(:gun) do
 
     defp handle_fin_response(headers, opts) do
       # Trailers-only response: headers contain trailers, check status
-      with :ok <- parse_trailers(headers) do
+      with :ok <- parse_trailers(headers, nil) do
         if opts[:return_headers] do
           {:ok, [], %{headers: headers}}
         else
@@ -372,7 +376,8 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp handle_streaming_nofin_response(stream, headers, opts, deadline) do
-      response = response_stream(:nofin, stream, opts, deadline)
+      compressor = get_compressor(headers, stream.accepted_compressors)
+      response = response_stream(:nofin, stream, opts, deadline, compressor, headers)
 
       if opts[:return_headers] do
         {:ok, response, %{headers: headers}}
@@ -421,6 +426,9 @@ if Code.ensure_loaded?(:gun) do
         data = {:data, _} ->
           data
 
+        data = {:data_fin, _} ->
+          data
+
         trailers = {:trailers, _} ->
           trailers
 
@@ -438,32 +446,11 @@ if Code.ensure_loaded?(:gun) do
 
     defp await(response_pid, deadline) do
       case GRPC.Client.Adapters.Gun.StreamResponseProcess.await(response_pid, deadline) do
-        {:response, :fin, status, headers} ->
-          if status == 200 do
-            headers = GRPC.Transport.HTTP2.decode_headers(headers)
-            {:response, headers, :fin}
-          else
-            {:error,
-             GRPC.RPCError.exception(
-               GRPC.Status.internal(),
-               "status got is #{status} instead of 200"
-             )}
-          end
-
-        {:response, :nofin, status, headers} ->
-          if status == 200 do
-            headers = GRPC.Transport.HTTP2.decode_headers(headers)
-            {:response, headers, :nofin}
-          else
-            {:error,
-             GRPC.RPCError.exception(
-               GRPC.Status.internal(),
-               "status got is #{status} instead of 200"
-             )}
-          end
+        {:response, fin, status, headers} ->
+          response_headers(status, headers, fin)
 
         {:data, :fin, data} ->
-          {:data, data}
+          {:data_fin, data}
 
         {:data, :nofin, data} ->
           {:data, data}
@@ -473,6 +460,9 @@ if Code.ensure_loaded?(:gun) do
 
         {:error, :timeout} ->
           deadline_exceeded()
+
+        {:error, :canceled} ->
+          {:error, GRPC.RPCError.exception(GRPC.Status.cancelled(), "Canceled by the client")}
 
         # Connection-level failures are UNAVAILABLE per the gRPC status spec:
         # the RPC never completed on a live connection, so callers can safely
@@ -487,11 +477,18 @@ if Code.ensure_loaded?(:gun) do
         {:error, {:connection_error, msg}} ->
           connection_error(msg)
 
+        # A server enforces the `grpc-timeout` it was sent from when the request reached it,
+        # so never before the client's own deadline. A CANCEL reset once the deadline has
+        # passed is that deadline, whichever side notices first.
         {:error, {:stream_error, msg}} ->
-          GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
+          if cancel_reset?(msg) and near_deadline?(deadline) do
+            deadline_exceeded()
+          else
+            GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :stream_error)
 
-          {:error,
-           GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+            {:error,
+             GRPC.RPCError.exception(GRPC.Status.internal(), "stream_error: #{inspect(msg)}")}
+          end
 
         # Gun's own way to report a gone connection, e.g. `{:down, :normal}`
         {:error, {reason, msg}} when reason in [:down, :noproc, :normal, :shutdown] ->
@@ -508,6 +505,28 @@ if Code.ensure_loaded?(:gun) do
              "unexpected message when waiting for server: #{inspect(other)}"
            )}
       end
+    end
+
+    defp response_headers(200, headers, fin) do
+      headers = GRPC.Transport.HTTP2.decode_headers(headers)
+
+      if GRPC.Transport.HTTP2.grpc_content_type?(headers["content-type"]) do
+        {:response, headers, fin}
+      else
+        {:error,
+         GRPC.RPCError.exception(
+           GRPC.Status.unknown(),
+           "Unexpected content-type: #{inspect(headers["content-type"])}"
+         )}
+      end
+    end
+
+    defp response_headers(status, _headers, _fin) do
+      {:error,
+       GRPC.RPCError.exception(
+         GRPC.Transport.HTTP2.status_from_http(status),
+         "status got is #{status} instead of 200"
+       )}
     end
 
     def retry_fun(retries, _opts) do
@@ -544,6 +563,10 @@ if Code.ensure_loaded?(:gun) do
           with :ok <- check_body_prefix(stream, acc, size, new_size) do
             recv_body(stream, stream_payload, acc, new_size, deadline)
           end
+
+        # The last frame carried END_STREAM, so there are no trailers and no grpc-status.
+        {:data_fin, data} ->
+          {:ok, IO.iodata_to_binary([acc, data]), %{}}
 
         {:trailers, trailers} ->
           body = IO.iodata_to_binary(acc)
@@ -585,9 +608,12 @@ if Code.ensure_loaded?(:gun) do
              payload: payload
            } = stream,
            opts,
-           deadline
+           deadline,
+           compressor,
+           headers
          ) do
       state = %{
+        headers: headers,
         payload: payload,
         stream: stream,
         buffer: <<>>,
@@ -596,7 +622,9 @@ if Code.ensure_loaded?(:gun) do
         opts: opts,
         response_mod: res_mod,
         codec: codec,
-        deadline: deadline
+        compressor: compressor,
+        deadline: deadline,
+        ended: false
       }
 
       Stream.unfold(state, fn s -> read_stream(s) end)
@@ -623,6 +651,13 @@ if Code.ensure_loaded?(:gun) do
           |> Map.put(:buffer, buffer <> data)
           |> read_stream()
 
+        {:data_fin, data} ->
+          stream
+          |> Map.put(:need_more, false)
+          |> Map.put(:ended, true)
+          |> Map.put(:buffer, buffer <> data)
+          |> read_stream()
+
         {:trailers, trailers} ->
           update_stream_with_trailers(stream, trailers, opts[:return_headers])
 
@@ -632,10 +667,17 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp read_stream(
-           %{buffer: buffer, need_more: false, response_mod: res_mod, codec: codec, opts: opts} =
-             stream
+           %{
+             buffer: buffer,
+             need_more: false,
+             response_mod: res_mod,
+             codec: codec,
+             compressor: compressor,
+             opts: opts,
+             ended: ended
+           } = stream
          ) do
-      case get_message(buffer) do
+      case get_message(buffer, compressor) do
         {:error, _} = error ->
           # The rest of the message is not read: reset the stream.
           cancel(stream.stream)
@@ -650,25 +692,73 @@ if Code.ensure_loaded?(:gun) do
           {{:ok, trailers}, new_stream}
 
         {{_, message}, rest} ->
-          reply = codec.decode(message, res_mod)
-          new_stream = Map.put(stream, :buffer, rest)
-          {{:ok, reply}, new_stream}
+          case GRPC.Client.ReplyDecoder.decode(codec, message, res_mod) do
+            {:ok, reply} ->
+              {{:ok, reply}, Map.put(stream, :buffer, rest)}
+
+            {:error, error} ->
+              cancel(stream.stream)
+              {{:error, error}, %{buffer: <<>>, fin: true, fin_resp: nil}}
+          end
+
+        _ when ended ->
+          # The stream ended without a `grpc-status`.
+          error = %{missing_status_error(buffer) | headers: stream.headers}
+          {{:error, error}, %{buffer: <<>>, fin: true, fin_resp: nil}}
 
         _ ->
           read_stream(Map.put(stream, :need_more, true))
       end
     end
 
+    defp missing_status_error(<<>>) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+      GRPC.RPCError.exception(GRPC.Status.internal(), "Missing grpc-status in the response.")
+    end
+
+    defp missing_status_error(_incomplete_message) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+      GRPC.RPCError.exception(
+        GRPC.Status.internal(),
+        "The response ended in the middle of a message."
+      )
+    end
+
     # A message over `:max_message_length` ends the stream with an error item.
     # The prefix is checked here, as newer `GRPC.Message.get_message/1` does, and
     # that function raises for it.
-    defp get_message(buffer) do
+    defp get_message(buffer, compressor) do
       with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer) do
-        GRPC.Message.get_message(buffer)
+        case GRPC.Message.get_message(buffer, compressor) do
+          {{1, _message}, _rest} when is_nil(compressor) ->
+            {:error,
+             GRPC.RPCError.exception(
+               status: :internal,
+               message: "Compressed flag is set, but not specified in headers."
+             )}
+
+          other ->
+            other
+        end
       end
     rescue
-      error in GRPC.RPCError -> {:error, error}
+      error in GRPC.RPCError ->
+        {:error, error}
+
+      _ ->
+        {:error,
+         GRPC.RPCError.exception(status: :internal, message: "Message could not be decompressed.")}
     end
+
+    defp cancel_reset?({:stream_error, :cancel, _}), do: true
+    defp cancel_reset?(_), do: false
+
+    defp near_deadline?(deadline) when is_integer(deadline),
+      do: deadline - @deadline_tolerance <= System.monotonic_time(:millisecond)
+
+    defp near_deadline?(_), do: false
 
     defp deadline(nil), do: :infinity
     defp deadline(:infinity), do: :infinity
@@ -740,34 +830,63 @@ if Code.ensure_loaded?(:gun) do
            body,
            trailers
          ) do
-      with :ok <- parse_trailers(trailers),
+      with :ok <- parse_trailers(trailers, headers),
            compressor <- get_compressor(headers, accepted_compressors),
            body <- get_body(codec, body),
+           :ok <- check_has_message(body, headers, trailers),
            :ok <- GRPC.Client.MessageLimit.check_prefix(body),
-           {:ok, msg, remaining} <- GRPC.Message.from_data(%{compressor: compressor}, body) do
-        {:ok, codec.decode(msg, res_mod), check_for_trailers(remaining, compressor)}
+           {:ok, msg, remaining} <- GRPC.Message.from_data(%{compressor: compressor}, body),
+           {:ok, embedded_trailers} <- check_for_trailers(remaining, compressor),
+           {:ok, reply} <- GRPC.Client.ReplyDecoder.decode(codec, msg, res_mod) do
+        {:ok, reply, embedded_trailers}
       end
     end
 
-    defp check_for_trailers(<<>>, _compressor), do: %{}
+    # A call that returns one message did not, though its status is OK.
+    defp check_has_message(<<>>, headers, trailers),
+      do: {:error, no_response_error(headers, trailers)}
+
+    defp check_has_message(_body, _headers, _trailers), do: :ok
+
+    defp no_response_error(headers, trailers) do
+      error =
+        GRPC.RPCError.exception(GRPC.Status.unimplemented(), "Missing response message.")
+
+      %{error | headers: headers, trailers: trailers}
+    end
+
+    defp check_for_trailers(<<>>, _compressor), do: {:ok, %{}}
 
     defp check_for_trailers(body, compressor) do
       case GRPC.Message.from_data(%{compressor: compressor}, body) do
-        {:trailers, trailers, <<>>} -> trailers
-        _ -> %{}
+        {:trailers, trailers, <<>>} ->
+          {:ok, trailers}
+
+        _ when binary_part(body, 0, 1) == <<128>> ->
+          # A trailers frame that cannot be read: the status is checked elsewhere.
+          {:ok, %{}}
+
+        _ ->
+          {:error,
+           GRPC.RPCError.exception(
+             GRPC.Status.unimplemented(),
+             "Received more than one message for a call that returns one."
+           )}
       end
     end
 
     defp update_stream_with_trailers(stream, trailers, return_headers?) do
       trailers = GRPC.Transport.HTTP2.decode_headers(trailers)
 
-      case parse_trailers(trailers) do
+      case parse_trailers(trailers, stream.headers) do
         :ok ->
           fin_resp = if return_headers?, do: {:trailers, trailers}
 
           stream
           |> Map.put(:fin, true)
           |> Map.put(:fin_resp, fin_resp)
+          |> Map.put(:ended, true)
+          |> Map.put(:need_more, false)
           |> read_stream()
 
         error ->
@@ -775,9 +894,27 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
-    defp parse_trailers(trailers) do
-      status = String.to_integer(trailers["grpc-status"])
+    # The error carries the response headers and the trailers it came from.
+    defp parse_trailers(trailers, headers) do
+      case check_trailers(trailers) do
+        :ok -> :ok
+        {:error, error} -> {:error, %{error | headers: headers, trailers: trailers}}
+      end
+    end
 
+    defp check_trailers(%{"grpc-status" => value} = trailers) do
+      case Integer.parse(value) do
+        {status, ""} ->
+          parse_status(status, trailers)
+
+        _ ->
+          {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "Invalid grpc-status.")}
+      end
+    end
+
+    defp check_trailers(_trailers), do: {:error, missing_status_error(<<>>)}
+
+    defp parse_status(status, trailers) do
       if status == GRPC.Status.ok() do
         :ok
       else

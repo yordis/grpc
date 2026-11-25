@@ -12,7 +12,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
       grpc_stream: build(:client_stream),
       responses: :queue.new(),
       compressor: nil,
-      send_headers_or_trailers: false
+      send_headers_or_trailers: false,
+      terminated: false
     }
 
     %{state: state}
@@ -163,10 +164,12 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
             state
           )
 
-        expected_error = {:error, %GRPC.RPCError{message: "Internal Server Error", status: 2}}
-
         assert {:reply, :ok, new_state, {:continue, :produce_response}} = response
-        assert :queue.to_list(new_state.responses) == [expected_error]
+
+        assert [{:error, %GRPC.RPCError{message: "Internal Server Error", status: 2} = error}] =
+                 :queue.to_list(new_state.responses)
+
+        assert error.trailers["grpc-status"] == "2"
       end,
       do: [
         {%{type: :headers, is_header_enabled: false}},
@@ -383,8 +386,15 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
 
     test "ends stream when done message is passed", %{pid: pid} do
       stream = StreamResponseProcess.build_stream(pid)
+      StreamResponseProcess.consume(pid, :trailers, [{"grpc-status", "0"}])
       StreamResponseProcess.done(pid)
-      assert Enum.to_list(stream) == []
+      assert Enum.to_list(stream) == [{:trailers, %{"grpc-status" => "0"}}]
+    end
+
+    test "ends the stream with an error when done is passed without a grpc-status", %{pid: pid} do
+      stream = StreamResponseProcess.build_stream(pid)
+      StreamResponseProcess.done(pid)
+      assert [{:error, %GRPC.RPCError{status: 13}}] = Enum.to_list(stream)
     end
 
     test "emits error tuple on stream when error is given to consume", %{pid: pid} do
@@ -399,8 +409,9 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
       data_to_consume = <<0, 0, 0, 0, 12, 10, 10, 72, 101, 108, 108, 111, 32, 76, 117, 105, 115>>
       stream = StreamResponseProcess.build_stream(pid)
       StreamResponseProcess.consume(pid, :data, data_to_consume)
+      StreamResponseProcess.consume(pid, :trailers, [{"grpc-status", "0"}])
       StreamResponseProcess.done(pid)
-      assert [data] = Enum.to_list(stream)
+      assert [data, {:trailers, _}] = Enum.to_list(stream)
       assert {:ok, build(:hello_reply_rpc)} == data
     end
 
@@ -414,12 +425,14 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
       stream = StreamResponseProcess.build_stream(pid)
       StreamResponseProcess.consume(pid, :data, hello_luis)
       StreamResponseProcess.consume(pid, :data, bye_luis)
+      StreamResponseProcess.consume(pid, :trailers, [{"grpc-status", "0"}])
       StreamResponseProcess.done(pid)
 
       expected_elements =
         [
-          ok: build(:hello_reply_rpc),
-          ok: build(:bye_reply_rpc)
+          {:ok, build(:hello_reply_rpc)},
+          {:ok, build(:bye_reply_rpc)},
+          {:trailers, %{"grpc-status" => "0"}}
         ]
 
       assert Enum.to_list(stream) == expected_elements
@@ -436,11 +449,13 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
       # A single consume call carrying both messages — previously only the
       # first would have been decoded, causing the second to block.
       StreamResponseProcess.consume(pid, :data, combined)
+      StreamResponseProcess.consume(pid, :trailers, [{"grpc-status", "0"}])
       StreamResponseProcess.done(pid)
 
       assert Enum.to_list(stream) == [
                {:ok, build(:hello_reply_rpc)},
-               {:ok, build(:bye_reply_rpc)}
+               {:ok, build(:bye_reply_rpc)},
+               {:trailers, %{"grpc-status" => "0"}}
              ]
     end
 
@@ -492,9 +507,13 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
       stream = StreamResponseProcess.build_stream(pid, true, :timer.seconds(5))
 
       StreamResponseProcess.consume(pid, :data, data)
+      StreamResponseProcess.consume(pid, :trailers, [{"grpc-status", "0"}])
       StreamResponseProcess.done(pid)
 
-      assert Enum.to_list(stream) == [ok: build(:hello_reply_rpc)]
+      assert Enum.to_list(stream) == [
+               ok: build(:hello_reply_rpc),
+               trailers: %{"grpc-status" => "0"}
+             ]
     end
   end
 end

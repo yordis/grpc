@@ -516,9 +516,7 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp stop_response_process(response_pid) do
-      GenServer.stop(response_pid, :normal)
-    catch
-      :exit, _reason -> :ok
+      GRPC.Client.Adapters.Gun.StreamResponseProcess.cancel(response_pid)
     end
 
     defp emit_streams(state, active_streams) do

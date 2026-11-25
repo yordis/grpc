@@ -437,7 +437,7 @@ defmodule GRPC.Client.Adapters.GunTest do
       assert canceled.canceled
       assert :ok = ConnectionProcess.cancel(connected.adapter_payload.conn_pid, stream_ref)
       assert Process.alive?(connected.adapter_payload.conn_pid)
-      assert_receive {:DOWN, ^monitor_ref, :process, ^response_pid, :normal}
+      assert_receive {:DOWN, ^monitor_ref, :process, ^response_pid, :normal}, 2_000
 
       refute Map.has_key?(
                :sys.get_state(connected.adapter_payload.conn_pid).response_processes,

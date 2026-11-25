@@ -24,6 +24,7 @@ if Code.ensure_loaded?(:gun) do
     require Logger
 
     @terminated_stream_error {:error, {:connection_error, :closed}}
+    @cancel_grace 1_000
 
     def start_link do
       GenServer.start_link(__MODULE__, [])
@@ -41,6 +42,16 @@ if Code.ensure_loaded?(:gun) do
     catch
       :exit, _reason ->
         @terminated_stream_error
+    end
+
+    @doc """
+    Ends the stream because the caller cancelled it. A reader waiting now, or
+    reading later, gets `{:error, :canceled}` instead of what was queued.
+    """
+    def cancel(pid) do
+      GenServer.call(pid, :cancel)
+    catch
+      :exit, _reason -> :ok
     end
 
     @impl GenServer
@@ -65,6 +76,33 @@ if Code.ensure_loaded?(:gun) do
         |> put_earlier_deadline(deadline)
 
       {:reply, :ok, state}
+    end
+
+    # A stream that already finished keeps its own result.
+    def handle_call(:cancel, _from, %{done: true} = state), do: {:reply, :ok, state}
+
+    def handle_call(:cancel, _from, state) do
+      state = cancel_deadline(state)
+      canceled = {:error, :canceled}
+
+      case state.waiter do
+        nil ->
+          # Whatever is queued is still readable; the canceled error follows it. The
+          # process lingers briefly for that read, then goes away.
+          Process.send_after(self(), :cancel_expired, @cancel_grace)
+
+          {:reply, :ok,
+           %{
+             state
+             | messages: :queue.in(canceled, state.messages),
+               flow_target: nil,
+               done: true
+           }}
+
+        waiter ->
+          GenServer.reply(waiter, canceled)
+          {:stop, :normal, :ok, %{state | waiter: nil, done: true}}
+      end
     end
 
     def handle_call({:await, deadline}, from, state) do
@@ -107,6 +145,8 @@ if Code.ensure_loaded?(:gun) do
     end
 
     def handle_info({:deadline_expired, _timer_ref}, state), do: {:noreply, state}
+
+    def handle_info(:cancel_expired, state), do: {:stop, :normal, state}
 
     def handle_info({:gun_response, _conn_pid, _stream_ref, fin, status, headers}, state) do
       state

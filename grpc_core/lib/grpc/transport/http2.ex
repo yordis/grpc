@@ -18,6 +18,25 @@ defmodule GRPC.Transport.HTTP2 do
     %{"content-type" => "application/grpc+#{codec_name(codec)}"}
   end
 
+  @doc """
+  The gRPC status for a response that has an HTTP status other than 200 and no
+  `grpc-status`, as in the gRPC "HTTP to gRPC status code mapping" document.
+  """
+  def status_from_http(400), do: Status.internal()
+  def status_from_http(401), do: Status.unauthenticated()
+  def status_from_http(403), do: Status.permission_denied()
+  def status_from_http(404), do: Status.unimplemented()
+  def status_from_http(status) when status in [429, 502, 503, 504], do: Status.unavailable()
+  def status_from_http(_status), do: Status.unknown()
+
+  @doc """
+  Whether a response `content-type` is one of gRPC. A response without one is
+  accepted, since some servers omit it from a trailers-only reply.
+  """
+  def grpc_content_type?(nil), do: true
+  def grpc_content_type?("application/grpc" <> _), do: true
+  def grpc_content_type?(_content_type), do: false
+
   def server_trailers(status \\ Status.ok(), message \\ "", details \\ nil) do
     %{
       "grpc-status" => Integer.to_string(status),
@@ -85,16 +104,25 @@ defmodule GRPC.Transport.HTTP2 do
   def extract_metadata(headers) do
     headers
     |> Enum.filter(fn {k, _} -> is_metadata(k) end)
-    |> Enum.into(%{}, &decode_metadata/1)
+    |> combine(&decode_metadata/1)
   end
 
+  # A header that appears more than once keeps every value, joined with a comma
+  # as RFC 9110 allows for any field.
   def decode_headers(headers) do
-    Enum.into(headers, %{}, fn {k, v} ->
+    combine(headers, fn {k, v} ->
       if is_metadata(k) do
         decode_metadata({k, v})
       else
         decode_reserved({k, v})
       end
+    end)
+  end
+
+  defp combine(headers, decode) do
+    Enum.reduce(headers, %{}, fn header, acc ->
+      {key, value} = decode.(header)
+      Map.update(acc, key, value, fn old -> old <> "," <> value end)
     end)
   end
 
@@ -148,13 +176,23 @@ defmodule GRPC.Transport.HTTP2 do
   end
 
   defp encode_metadata_pair({key, val}) do
-    val = if String.ends_with?(key, "-bin"), do: Base.encode64(val, padding: true), else: val
+    val = if String.ends_with?(key, "-bin"), do: Base.encode64(val, padding: false), else: val
     {String.downcase(to_string(key)), val}
   end
 
   defp decode_metadata({key, val}) do
-    val = if String.ends_with?(key, "-bin"), do: Base.decode64!(val, padding: false), else: val
+    val = if String.ends_with?(key, "-bin"), do: decode_binary_value(val), else: val
     {key, val}
+  end
+
+  # A peer may send the base64 padded or not, and may send several values in one
+  # entry, separated by commas.
+  defp decode_binary_value(val) do
+    val
+    |> String.split(",")
+    |> Enum.map_join(",", fn part ->
+      part |> String.trim() |> String.trim_trailing("=") |> Base.decode64!(padding: false)
+    end)
   end
 
   defp decode_reserved({"grpc-message" = key, val}) do

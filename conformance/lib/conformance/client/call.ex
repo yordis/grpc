@@ -174,7 +174,7 @@ defmodule Conformance.Client.Call do
           }
 
         {:error, error} ->
-          %ClientResponseResult{error: to_error(error)}
+          put_error(%ClientResponseResult{}, error)
       end
     end)
   end
@@ -193,7 +193,7 @@ defmodule Conformance.Client.Call do
           consume(replies, new_result(%{}), req, 0)
 
         {:error, error} ->
-          %ClientResponseResult{error: to_error(error)}
+          put_error(%ClientResponseResult{}, error)
       end
     end)
   end
@@ -219,7 +219,7 @@ defmodule Conformance.Client.Call do
             }
 
           {:error, error} ->
-            %ClientResponseResult{error: to_error(error)}
+            put_error(%ClientResponseResult{}, error)
         end
     end
   end
@@ -259,7 +259,7 @@ defmodule Conformance.Client.Call do
             end
 
           {:error, error} ->
-            {:halt, %{result | error: to_error(error), num_unsent_requests: total - index}}
+            {:halt, %{put_error(result, error) | num_unsent_requests: total - index}}
         end
     end
 
@@ -300,7 +300,7 @@ defmodule Conformance.Client.Call do
           {:cont, {:ok, stream}}
 
         {:error, error} ->
-          result = %ClientResponseResult{error: to_error(error), num_unsent_requests: total - index}
+          result = %{put_error(%ClientResponseResult{}, error) | num_unsent_requests: total - index}
           {:halt, {:error, result}}
       end
     end)
@@ -344,7 +344,7 @@ defmodule Conformance.Client.Call do
     case GRPC.Stub.recv(stream, [return_headers: true] ++ recv_opts(req)) do
       {:ok, replies, %{headers: headers}} -> consume(replies, new_result(headers), req, 0)
       {:ok, replies} -> consume(replies, new_result(%{}), req, 0)
-      {:error, error} -> %ClientResponseResult{error: to_error(error)}
+      {:error, error} -> put_error(%ClientResponseResult{}, error)
     end
   end
 
@@ -378,7 +378,7 @@ defmodule Conformance.Client.Call do
             {:cont, {%{result | response_trailers: headers(trailers)}, seen}}
 
           {:error, error} ->
-            {:halt, {%{result | error: to_error(error)}, seen}}
+            {:halt, {put_error(result, error), seen}}
         end
       end)
 
@@ -396,7 +396,7 @@ defmodule Conformance.Client.Call do
         take_one(stream, replies, req, result)
 
       {:error, error} ->
-        {nil, %{result | error: to_error(error)}}
+        {nil, put_error(result, error)}
     end
   end
 
@@ -440,7 +440,7 @@ defmodule Conformance.Client.Call do
         %{result | response_trailers: headers(trailers)}
 
       {:error, error}, result ->
-        %{result | error: to_error(error)}
+        put_error(result, error)
     end)
   end
 
@@ -465,7 +465,7 @@ defmodule Conformance.Client.Call do
   defp guarded(fun) do
     fun.()
   rescue
-    error -> %ClientResponseResult{error: to_error(error)}
+    error -> put_error(%ClientResponseResult{}, error)
   end
 
   # Conversions
@@ -483,6 +483,23 @@ defmodule Conformance.Client.Call do
   end
 
   defp canceled, do: %Error{code: @canceled, message: "canceled"}
+
+  # An error carries the response headers and trailers the server sent with it.
+  defp put_error(result, error) do
+    result = %{result | error: to_error(error)}
+
+    case error do
+      %GRPC.RPCError{headers: headers, trailers: trailers} ->
+        %{
+          result
+          | response_headers: if(result.response_headers == [], do: headers(headers), else: result.response_headers),
+            response_trailers: headers(trailers)
+        }
+
+      _ ->
+        result
+    end
+  end
 
   defp to_error(%GRPC.RPCError{status: status, message: message, details: details}) do
     %Error{code: status, message: message, details: any_details(details)}

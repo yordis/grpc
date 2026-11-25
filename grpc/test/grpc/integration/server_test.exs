@@ -263,7 +263,7 @@ defmodule GRPC.Integration.ServerTest do
           assert %GRPC.RPCError{
                    status: GRPC.Status.unauthenticated(),
                    message: "Please authenticate"
-                 } == reply
+                 } == %{reply | headers: nil, trailers: nil}
         end)
       end)
 
@@ -277,9 +277,10 @@ defmodule GRPC.Integration.ServerTest do
           {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
           req = %Helloworld.HelloRequest{name: "unknown error"}
 
-          assert {:error,
-                  %GRPC.RPCError{message: "Internal Server Error", status: GRPC.Status.unknown()}} ==
-                   channel |> Helloworld.Greeter.Stub.say_hello(req)
+          assert {:error, reply} = channel |> Helloworld.Greeter.Stub.say_hello(req)
+
+          assert %GRPC.RPCError{message: "Internal Server Error", status: GRPC.Status.unknown()} ==
+                   %{reply | headers: nil, trailers: nil}
         end)
       end)
 
@@ -398,8 +399,9 @@ defmodule GRPC.Integration.ServerTest do
     run_server([FeatureErrorServer], fn port ->
       {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
       rect = %Routeguide.Rectangle{}
-      error = %GRPC.RPCError{message: "Please authenticate", status: 16}
-      assert {:error, ^error} = channel |> Routeguide.RouteGuide.Stub.list_features(rect)
+
+      assert {:error, %GRPC.RPCError{message: "Please authenticate", status: 16}} =
+               channel |> Routeguide.RouteGuide.Stub.list_features(rect)
     end)
   end
 
@@ -418,9 +420,7 @@ defmodule GRPC.Integration.ServerTest do
       run_server([TimeoutServer], fn port ->
         {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
         rect = %Routeguide.Rectangle{}
-        error = %GRPC.RPCError{message: "Deadline expired", status: 4}
-
-        assert {:error, ^error} =
+        assert {:error, %GRPC.RPCError{message: "Deadline expired", status: 4}} =
                  channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 50)
       end)
     end)
@@ -483,7 +483,8 @@ defmodule GRPC.Integration.ServerTest do
           client_stream = Routeguide.RouteGuide.Stub.route_chat(channel)
           assert %GRPC.Client.Stream{} = client_stream
           {:ok, ex_stream} = GRPC.Stub.recv(client_stream, timeout: :infinity)
-          assert [{:error, %GRPC.RPCError{status: 14}}] = Enum.into(ex_stream, [])
+          # The server ends the stream without trailers, so there is no grpc-status.
+          assert [{:error, %GRPC.RPCError{status: 13}}] = Enum.into(ex_stream, [])
         end)
       end)
 

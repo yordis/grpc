@@ -303,15 +303,19 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
       {{_, message}, rest} ->
         # TODO: add code here to handle compressor headers
-        response = codec.decode(message, res_mod)
+        case GRPC.Client.ReplyDecoder.decode(codec, message, res_mod) do
+          {:ok, response} ->
+            drain_buffer(
+              rest,
+              compressor,
+              codec,
+              res_mod,
+              :queue.in({:ok, response}, responses_queue)
+            )
 
-        drain_buffer(
-          rest,
-          compressor,
-          codec,
-          res_mod,
-          :queue.in({:ok, response}, responses_queue)
-        )
+          {:error, error} ->
+            {:error, error, responses_queue}
+        end
 
       _ ->
         {buffer, responses_queue}

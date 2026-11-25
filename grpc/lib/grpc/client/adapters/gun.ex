@@ -684,9 +684,14 @@ if Code.ensure_loaded?(:gun) do
           {{:ok, trailers}, new_stream}
 
         {{_, message}, rest} ->
-          reply = codec.decode(message, res_mod)
-          new_stream = Map.put(stream, :buffer, rest)
-          {{:ok, reply}, new_stream}
+          case GRPC.Client.ReplyDecoder.decode(codec, message, res_mod) do
+            {:ok, reply} ->
+              {{:ok, reply}, Map.put(stream, :buffer, rest)}
+
+            {:error, error} ->
+              cancel(stream.stream)
+              {{:error, error}, %{buffer: <<>>, fin: true, fin_resp: nil}}
+          end
 
         _ when ended ->
           # The stream ended without a `grpc-status`.
@@ -815,8 +820,9 @@ if Code.ensure_loaded?(:gun) do
            :ok <- check_has_message(body, headers, trailers),
            :ok <- GRPC.Client.MessageLimit.check_prefix(body),
            {:ok, msg, remaining} <- GRPC.Message.from_data(%{compressor: compressor}, body),
-           {:ok, embedded_trailers} <- check_for_trailers(remaining, compressor) do
-        {:ok, codec.decode(msg, res_mod), embedded_trailers}
+           {:ok, embedded_trailers} <- check_for_trailers(remaining, compressor),
+           {:ok, reply} <- GRPC.Client.ReplyDecoder.decode(codec, msg, res_mod) do
+        {:ok, reply, embedded_trailers}
       end
     end
 

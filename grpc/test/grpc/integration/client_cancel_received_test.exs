@@ -1,6 +1,6 @@
 defmodule GRPC.Integration.ClientCancelReceivedTest do
   # Cancels a server-streaming call after the whole response arrived, but before the
-  # caller read it: the caller gets CANCELED next, and nothing of what was left.
+  # caller read it: the caller gets CANCELLED next, and nothing of what was left.
   use GRPC.Integration.TestCase, async: false
 
   alias GRPC.Client.Adapters.{Gun, Mint}
@@ -41,7 +41,7 @@ defmodule GRPC.Integration.ClientCancelReceivedTest do
     describe name do
       @describetag connect_opts: connect_opts
 
-      test "a server stream cancelled after it arrived ends with CANCELED and no more replies",
+      test "a server stream cancelled after it arrived ends with CANCELLED and no more replies",
            %{connect_opts: connect_opts} do
         run_server(RouteServer, fn port ->
           {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", connect_opts)

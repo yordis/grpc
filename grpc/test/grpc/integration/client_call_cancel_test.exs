@@ -51,7 +51,7 @@ defmodule GRPC.Integration.ClientCallCancelTest do
     describe name do
       @describetag connect_opts: connect_opts
 
-      test "a unary call cancelled in flight fails with CANCELED and the server sees the reset",
+      test "a unary call cancelled in flight fails with CANCELLED and the server sees the reset",
            %{connect_opts: connect_opts} do
         run_server(HelloServer, fn port ->
           {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", connect_opts)
@@ -74,7 +74,7 @@ defmodule GRPC.Integration.ClientCallCancelTest do
         end)
       end
 
-      test "a unary call cancelled before it starts fails with CANCELED",
+      test "a unary call cancelled before it starts fails with CANCELLED",
            %{connect_opts: connect_opts} do
         run_server(HelloServer, fn port ->
           {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", connect_opts)
@@ -104,7 +104,7 @@ defmodule GRPC.Integration.ClientCallCancelTest do
         end)
       end
 
-      test "a server-streaming call cancelled while the stream is open ends with CANCELED",
+      test "a server-streaming call cancelled while the stream is open ends with CANCELLED",
            %{connect_opts: connect_opts} do
         run_server(RouteServer, fn port ->
           {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", connect_opts)

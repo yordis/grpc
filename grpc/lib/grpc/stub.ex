@@ -915,7 +915,7 @@ defmodule GRPC.Stub do
   end
 
   # Lets `cancel/1` reach the call, and resets it at once when the handle was cancelled
-  # while the request was being sent. The reply then is the CANCELED error of the adapter.
+  # while the request was being sent. The reply then is the CANCELLED error of the adapter.
   defp register_cancel(stream, nil), do: stream
 
   defp register_cancel(stream, %GRPC.Client.CancelHandle{} = handle) do
@@ -1025,10 +1025,10 @@ defmodule GRPC.Stub do
   Cancel a stream in a streaming client, or the call of a cancel handle.
 
   The call of a handle is reset (RST_STREAM CANCEL on HTTP/2, the connection is closed on
-  HTTP/1.1), and its caller gets an error with the CANCELED status: the unary reply, or the
+  HTTP/1.1), and its caller gets an error with the CANCELLED status: the unary reply, or the
   last item of the replies of a server-streaming call. Cancelling a handle whose call is
   over, or has not started, has no effect on the connection: a call started with a
-  cancelled handle fails with CANCELED without sending anything.
+  cancelled handle fails with CANCELLED without sending anything.
 
   After a stream is cancelled, callings to `recv/2` will return a CANCEL error.
   """
@@ -1233,7 +1233,7 @@ defmodule GRPC.Stub do
 
   # The replies of a server-streaming call reset the stream when the caller halts them
   # before the end, and drop the cancel handle of the call once they are over. Once the
-  # call is cancelled, the next reply is the CANCELED error and the replies end, though
+  # call is cancelled, the next reply is the CANCELLED error and the replies end, though
   # the adapter may have received the rest of the response before the cancel.
   defp wrap_replies(enum_stream, stream, lease_handle) do
     if lease_handle == nil and stream.grpc_type != :server_stream and stream.cancel_flag == nil do

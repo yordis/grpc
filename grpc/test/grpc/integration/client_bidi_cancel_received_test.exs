@@ -1,6 +1,6 @@
 defmodule GRPC.Integration.ClientBidiCancelReceivedTest do
   # Cancels a bidi stream with `GRPC.Stub.cancel/1` after the whole response arrived, but
-  # before the caller read it: the caller gets CANCELED next, and nothing of what was left.
+  # before the caller read it: the caller gets CANCELLED next, and nothing of what was left.
   use GRPC.Integration.TestCase, async: false
 
   alias GRPC.Client.Adapters.{Gun, Mint}
@@ -28,7 +28,7 @@ defmodule GRPC.Integration.ClientBidiCancelReceivedTest do
   defp note(n), do: %Routeguide.RouteNote{message: "Message #{n}"}
 
   for adapter <- [Gun, Mint], protocol <- [:grpc, :connect, :grpc_web] do
-    test "#{inspect(adapter)} over #{protocol}: a bidi stream cancelled after it arrived ends with CANCELED" do
+    test "#{inspect(adapter)} over #{protocol}: a bidi stream cancelled after it arrived ends with CANCELLED" do
       run_server(ChatServer, fn port ->
         {:ok, channel} =
           GRPC.Stub.connect("localhost:#{port}",

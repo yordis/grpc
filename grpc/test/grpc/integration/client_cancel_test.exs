@@ -17,7 +17,7 @@ defmodule GRPC.Integration.ClientCancelTest do
     describe "with the #{inspect(adapter)} adapter" do
       @describetag adapter: adapter
 
-      test "a reply stream read after the call is cancelled ends with CANCELED",
+      test "a reply stream read after the call is cancelled ends with CANCELLED",
            %{adapter: adapter} do
         run_server(EchoServer, fn port ->
           {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", adapter: adapter)

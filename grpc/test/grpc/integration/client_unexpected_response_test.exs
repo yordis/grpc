@@ -75,7 +75,7 @@ defmodule GRPC.Integration.ClientUnexpectedResponseTest do
         assert {:error, %GRPC.RPCError{status: status}} =
                  adapter |> then(&connect(port, &1)) |> unary()
 
-        assert status in [@internal, @unknown]
+        assert status == @unimplemented
       end
 
       test "a client stream reply with more than one message is an error", %{adapter: adapter} do
@@ -91,7 +91,7 @@ defmodule GRPC.Integration.ClientUnexpectedResponseTest do
         assert {:error, %GRPC.RPCError{status: status}} =
                  adapter |> then(&connect(port, &1)) |> client_stream()
 
-        assert status in [@internal, @unknown]
+        assert status == @unimplemented
       end
 
       test "a server stream cut in the middle of a message, then trailers, is an error",

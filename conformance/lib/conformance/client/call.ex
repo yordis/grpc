@@ -169,7 +169,11 @@ defmodule Conformance.Client.Call do
   defp call_opts(req) do
     # Without a timeout in the request, send no deadline (the library defaults unary calls to 10s).
     [metadata: metadata(req.request_headers), timeout: req.timeout_ms || :infinity]
+    |> put_http_method(req)
   end
+
+  defp put_http_method(opts, %{use_get_http_method: true}), do: [{:http_method, :get} | opts]
+  defp put_http_method(opts, _req), do: opts
 
   defp metadata(headers) do
     Enum.reduce(headers, %{}, fn %Header{name: name, value: values}, acc ->

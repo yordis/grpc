@@ -157,25 +157,17 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   def handle_call({:consume_response, event}, _from, %{connect: connect} = state)
       when connect != nil and
              (event == :done or (is_tuple(event) and elem(event, 0) in @connect_events)) do
-    if state.failed do
-      {:reply, :cancel, state, {:continue, :produce_response}}
-    else
-      {connect, items, action} = GRPC.Client.Connect.Response.consume(connect, event)
-      state = %{state | connect: connect}
-      state = Enum.reduce(items, state, &queue_connect_item/2)
+    cond do
+      state.failed ->
+        {:reply, :cancel, state, {:continue, :produce_response}}
 
-      case {action, event} do
-        # The response cannot be read any further: the request is reset.
-        {:cancel, _} ->
-          state = %{state | failed: true, terminated: true, done: true}
-          {:reply, :cancel, state, {:continue, :produce_response}}
+      # The call already ended (an error, a cancel): what follows is dropped.
+      state.terminated ->
+        {:reply, :ok, %{state | done: state.done or event == :done},
+         {:continue, :produce_response}}
 
-        {:ok, :done} ->
-          {:reply, :ok, %{state | terminated: true, done: true}, {:continue, :produce_response}}
-
-        {:ok, _} ->
-          {:reply, :ok, state, {:continue, :produce_response}}
-      end
+      true ->
+        consume_connect(event, state)
     end
   end
 
@@ -310,6 +302,25 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
         {{:value, response}, rest} = :queue.out(state.responses)
         GenServer.reply(state.from, response)
         {:noreply, %{state | responses: rest, from: nil}}
+    end
+  end
+
+  defp consume_connect(event, %{connect: connect} = state) do
+    {connect, items, action} = GRPC.Client.Connect.Response.consume(connect, event)
+    state = %{state | connect: connect}
+    state = Enum.reduce(items, state, &queue_connect_item/2)
+
+    case {action, event} do
+      # The response cannot be read any further: the request is reset.
+      {:cancel, _} ->
+        state = %{state | failed: true, terminated: true, done: true}
+        {:reply, :cancel, state, {:continue, :produce_response}}
+
+      {:ok, :done} ->
+        {:reply, :ok, %{state | terminated: true, done: true}, {:continue, :produce_response}}
+
+      {:ok, _} ->
+        {:reply, :ok, state, {:continue, :produce_response}}
     end
   end
 

@@ -37,6 +37,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     alias GRPC.Channel
     alias GRPC.Client.Connect
+    alias GRPC.Client.HTTPVersions
     alias GRPC.Client.Adapters.Mint.ConnectionProcess
     alias GRPC.Client.Adapters.Mint.StreamResponseProcess
     alias GRPC.Credential
@@ -69,6 +70,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
         Defaults to `nil` (no pings).
       * `:keepalive_tolerance`: Number of unacknowledged pings after which the connection is closed,
         triggering `:retry` if configured. Defaults to `nil` (never close). Has no effect without `:keepalive`.
+      * `:http1_max_connections`: the most connections the channel opens over HTTP/1.1, default `8`.
+        HTTP/1.1 carries one call at a time on a connection, so a call that finds the channel's
+        connection busy opens another one for itself, up to this limit. Calls over it wait for a
+        connection to free, for at most 5 seconds or until their own deadline or cancel, and fail with
+        `UNAVAILABLE` (or `DEADLINE_EXCEEDED`, `CANCELLED`). A positive integer, where `1` makes the calls take the one connection in turn. HTTP/2 ignores it.
+      * `:protocols`: for `protocol: :connect` and `protocol: :grpc_web`, a non-empty list of the HTTP
+        versions to allow, from `:http1` and `:http2`. With `https://` the version is negotiated with
+        ALPN, and the default allows both. With `http://` there is no negotiation: the adapter speaks
+        HTTP/2 with prior knowledge unless the list is `[:http1]`. `protocol: :grpc` runs on HTTP/2 only
+        and takes no `:protocols` other than `[:http2]`. A value that is not valid raises `ArgumentError`
+        from `GRPC.Stub.connect/2`.
     """
     @impl true
     def connect(%Channel{} = channel, opts \\ []) do
@@ -91,14 +103,25 @@ if Code.ensure_loaded?(Mint.HTTP) do
       :protocols,
       :keepalive,
       :keepalive_tolerance,
+      :http1_max_connections,
       :config_options,
       :logical_connection_ref,
       :notify_drain
     ]
 
     @impl true
+    def supported_protocols, do: [:grpc, :connect, :grpc_web]
+
+    @impl true
     def validate_opts(opts) do
-      with :ok <- validate_known_opts(opts), do: validate_retry(opts[:retry])
+      with :ok <- validate_known_opts(opts),
+           :ok <- validate_retry(opts[:retry]),
+           do: GRPC.Client.HTTP1Lanes.validate(opts)
+    end
+
+    @impl true
+    def validate_opts(opts, protocol) do
+      with :ok <- validate_opts(opts), do: HTTPVersions.validate(protocol, opts)
     end
 
     @impl true
@@ -161,12 +184,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
     @impl true
     def send_data(
           %{
-            channel: %{adapter_payload: %{conn_pid: pid}},
             payload: %{response: {:ok, %{request_ref: request_ref}}}
           } = stream,
           message,
           opts
         ) do
+      pid = conn_pid(stream)
       {:ok, data, _} = GRPC.Message.to_data(message, opts)
       :ok = stream_body(stream, pid, request_ref, data)
       if opts[:send_end_stream], do: stream_body(stream, pid, request_ref, :eof)
@@ -174,25 +197,25 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
-    def end_stream(
-          %{
-            channel: %{adapter_payload: %{conn_pid: pid}},
-            payload: %{response: {:ok, %{request_ref: request_ref}}}
-          } = stream
-        ) do
+    def end_stream(%{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream) do
+      pid = conn_pid(stream)
       stream_body(stream, pid, request_ref, :eof)
       stream
     end
 
     @impl true
-    def cancel(stream) do
-      %{
-        channel: %{adapter_payload: %{conn_pid: conn_pid}},
-        payload: %{response: {:ok, %{request_ref: request_ref}}}
-      } = stream
+    # A call that failed before it was sent has nothing to cancel.
+    def cancel(%{payload: %{response: {:error, _error}}}), do: :ok
 
-      ConnectionProcess.cancel(conn_pid, request_ref)
+    def cancel(stream) do
+      %{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream
+
+      ConnectionProcess.cancel(conn_pid(stream), request_ref)
     end
+
+    # A call that found an HTTP/1.1 connection busy runs on a connection of its own.
+    defp conn_pid(%{payload: %{response: {:ok, %{conn_pid: pid}}}}), do: pid
+    defp conn_pid(%{channel: %{adapter_payload: %{conn_pid: pid}}}), do: pid
 
     # After GOAWAY the connection process fails the call with UNAVAILABLE and gives the
     # error to the response process, so `receive_data/2` returns it. Do not crash here.
@@ -273,16 +296,11 @@ if Code.ensure_loaded?(Mint.HTTP) do
       ]
     end
 
-    # The gRPC protocol runs on HTTP/2 only. Connect and gRPC-Web run on either version.
-    defp put_protocols(opts, %Channel{protocol: protocol}, protocols)
-         when protocol in [:connect, :grpc_web] and is_list(protocols),
-         do: Keyword.put(opts, :protocols, protocols)
-
-    defp put_protocols(opts, %Channel{protocol: protocol}, _protocols)
-         when protocol in [:connect, :grpc_web],
-         do: Keyword.put(opts, :protocols, [:http1, :http2])
-
-    defp put_protocols(opts, _channel, _protocols), do: opts
+    # See `GRPC.Client.HTTPVersions` for how the version is picked.
+    defp put_protocols(opts, %Channel{protocol: protocol} = channel, protocols) do
+      transport = if mint_scheme(channel) == :https, do: :tls, else: :tcp
+      Keyword.put(opts, :protocols, HTTPVersions.select(protocol, protocols, transport))
+    end
 
     defp mint_scheme(%Channel{scheme: "https"} = _channel), do: :https
     defp mint_scheme(_channel), do: :http
@@ -302,10 +320,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
       }
 
       {protocols, opts} = Keyword.pop(opts, :protocols)
+      {max_http1, opts} = Keyword.pop(opts, :http1_max_connections)
 
       opts =
         channel
         |> connect_opts(opts)
+        |> then(&if max_http1, do: Keyword.put(&1, :http1_max_connections, max_http1), else: &1)
         |> Keyword.merge(module_opts)
         |> put_protocols(channel, protocols)
         |> Keyword.put(:retry, retry)
@@ -451,10 +471,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
     # shuts it down — least of all when the connection process is the very thing
     # that went away.
     defp give_up_on_request(stream, stream_response_pid) do
-      %{
-        channel: %{adapter_payload: %{conn_pid: conn_pid}},
-        payload: %{response: {:ok, %{request_ref: request_ref}}}
-      } = stream
+      %{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream
+      conn_pid = conn_pid(stream)
 
       quietly(fn -> ConnectionProcess.cancel(conn_pid, request_ref, @cleanup_timeout) end)
       quietly(fn -> GenServer.stop(stream_response_pid, :normal, @cleanup_timeout) end)
@@ -592,7 +610,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
         try do
           ConnectionProcess.request(pid, method, path, headers, body,
             stream_response_pid: stream_response_pid,
-            protocol: stream.channel.protocol
+            protocol: stream.channel.protocol,
+            deadline: request_deadline(opts[:deadline] || opts[:timeout]),
+            cancel: opts[:cancel]
           )
         catch
           :exit, reason ->
@@ -617,6 +637,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp request_deadline(timeout) when is_integer(timeout),
       do: System.monotonic_time(:millisecond) + max(timeout, 0)
+
+    defp request_deadline(milliseconds) when is_number(milliseconds),
+      do: System.monotonic_time(:millisecond) + max(0, round(milliseconds))
 
     defp request_deadline(_timeout), do: nil
 

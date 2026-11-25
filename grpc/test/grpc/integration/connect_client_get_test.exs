@@ -13,6 +13,10 @@ defmodule GRPC.Integration.ConnectClientGetTest do
     })
 
     rpc(:Write, Helloworld.HelloRequest, Helloworld.HelloReply)
+
+    rpc(:Watch, Helloworld.HelloRequest, stream(Helloworld.HelloReply), %{
+      idempotency_level: :NO_SIDE_EFFECTS
+    })
   end
 
   defmodule ReadStub do
@@ -28,6 +32,8 @@ defmodule GRPC.Integration.ConnectClientGetTest do
     end
 
     def write(req, _stream), do: %Helloworld.HelloReply{message: "Wrote, #{req.name}"}
+
+    def watch(_req, stream), do: GRPC.Server.send_reply(stream, %Helloworld.HelloReply{})
   end
 
   def connect(port, adapter, opts) do
@@ -78,6 +84,59 @@ defmodule GRPC.Integration.ConnectClientGetTest do
                    )
         end)
       end
+    end
+  end
+
+  describe "the :http_method option" do
+    test "a method with side effects refuses :get" do
+      run_server(ReadServer, fn port ->
+        channel = connect(port, adapter_opts: [protocols: [:http2]])
+
+        assert_raise ArgumentError, ~r/NO_SIDE_EFFECTS/, fn ->
+          ReadStub.write(channel, %Helloworld.HelloRequest{name: "x"}, http_method: :get)
+        end
+      end)
+    end
+
+    test "a streaming call refuses :get" do
+      run_server(ReadServer, fn port ->
+        channel = connect(port, adapter_opts: [protocols: [:http2]])
+
+        assert_raise ArgumentError, ~r/unary/, fn ->
+          ReadStub.watch(channel, %Helloworld.HelloRequest{name: "x"}, http_method: :get)
+        end
+      end)
+    end
+
+    test "a channel that is not Connect refuses :get" do
+      run_server(ReadServer, fn port ->
+        {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", adapter: Mint)
+
+        assert_raise ArgumentError, ~r/protocol: :connect/, fn ->
+          ReadStub.read(channel, %Helloworld.HelloRequest{name: "x"}, http_method: :get)
+        end
+      end)
+    end
+
+    test "a value other than :get or :post is refused" do
+      run_server(ReadServer, fn port ->
+        channel = connect(port, adapter_opts: [protocols: [:http2]])
+
+        for value <- [:put, :GET, "GET", nil] do
+          assert_raise ArgumentError, ~r/http_method/, fn ->
+            ReadStub.read(channel, %Helloworld.HelloRequest{name: "x"}, http_method: value)
+          end
+        end
+      end)
+    end
+
+    test ":post is accepted on any channel" do
+      run_server(ReadServer, fn port ->
+        {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", adapter: Mint)
+
+        assert {:ok, %Helloworld.HelloReply{}} =
+                 ReadStub.read(channel, %Helloworld.HelloRequest{name: "x"}, http_method: :post)
+      end)
     end
   end
 end

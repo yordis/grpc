@@ -18,6 +18,21 @@ if Code.ensure_loaded?(:gun) do
 
     Options in `:adapter_opts` that this adapter reads itself, besides the ones Gun takes:
 
+      * `:protocols` - for `protocol: :connect` and `protocol: :grpc_web`, a non-empty list of
+        the HTTP versions to allow, from `:http1` and `:http2` (not Gun's own names). With
+        `https://` the version is negotiated with ALPN, and the default allows both. With
+        `http://` there is no negotiation: the adapter speaks HTTP/2 with prior knowledge
+        unless the list is `[:http1]`. `protocol: :grpc` runs on HTTP/2 only and takes no
+        `:protocols` other than `[:http2]`. The Mint adapter reads the same option the
+        same way.
+
+      * `:http1_max_connections` - the most connections the channel opens over HTTP/1.1
+        (default: `8`). HTTP/1.1 carries one call at a time on a connection, so a call that
+        finds the channel's connection busy opens another one for itself, up to this limit.
+        Calls over it wait for a connection to free, for at most
+        5 seconds or until their own deadline or cancel, and fail with `UNAVAILABLE`
+        (or `DEADLINE_EXCEEDED`, `CANCELLED`). A positive integer, where `1` makes the calls take the one connection in turn. HTTP/2 ignores it.
+
       * `:response_window` - bytes of a response the adapter reads ahead of the
         caller, per stream (default: `1_048_576`). The least value is `16_384`, one
         HTTP/2 frame. Gun counts the window in DATA frames, `ceil(window / 16_384)`
@@ -74,10 +89,19 @@ if Code.ensure_loaded?(:gun) do
     @min_connection_window 65_535
 
     @impl true
+    def supported_protocols, do: [:grpc, :connect, :grpc_web]
+
+    @impl true
+    def validate_opts(opts, protocol) when is_list(opts) do
+      with :ok <- validate_opts(opts), do: GRPC.Client.HTTPVersions.validate(protocol, opts)
+    end
+
+    @impl true
     def validate_opts(opts) when is_list(opts) do
       http2_opts = Keyword.get(opts, :http2_opts)
 
-      with :ok <- validate_response_window(opts),
+      with :ok <- GRPC.Client.HTTP1Lanes.validate(opts),
+           :ok <- validate_response_window(opts),
            :ok <- validate_stream_window(http2_opts) do
         validate_connection_window(http2_opts)
       end
@@ -183,23 +207,16 @@ if Code.ensure_loaded?(:gun) do
       do_connect(channel, open_opts)
     end
 
-    # The gRPC protocol runs on HTTP/2 only. Connect and gRPC-Web run on either version,
-    # `:http1` and `:http2` as the Mint adapter names them, and Gun opens a plain TCP
-    # connection with one.
-    defp protocols(%{protocol: protocol}, opts, transport)
-         when protocol in [:connect, :grpc_web] do
-      protocols =
-        opts
-        |> Map.get(:protocols, [:http1, :http2])
-        |> Enum.map(fn
-          :http1 -> :http
-          protocol -> protocol
-        end)
-
-      if transport == :tcp, do: Enum.take(protocols, 1), else: protocols
+    # See `GRPC.Client.HTTPVersions` for how the version is picked. The versions are named
+    # `:http1` and `:http2` as the Mint adapter names them, Gun calls the first `:http`.
+    defp protocols(%{protocol: protocol}, opts, transport) do
+      protocol
+      |> GRPC.Client.HTTPVersions.select(Map.get(opts, :protocols), transport)
+      |> Enum.map(fn
+        :http1 -> :http
+        version -> version
+      end)
     end
-
-    defp protocols(_channel, _opts, _transport), do: [:http2]
 
     defp do_connect(channel, open_opts) do
       # `:retry` and `:retry_fun` given in `:adapter_opts` take precedence.
@@ -250,10 +267,11 @@ if Code.ensure_loaded?(:gun) do
       deadline = deadline(opts[:timeout])
 
       case do_send_request(stream, message, opts, deadline) do
-        {:ok, stream_ref, response_pid} ->
+        {:ok, stream_ref, response_pid, lane} ->
           stream
           |> GRPC.Client.Stream.put_payload(:stream_ref, stream_ref)
           |> GRPC.Client.Stream.put_payload(:response_pid, response_pid)
+          |> GRPC.Client.Stream.put_payload(:lane, lane)
           |> GRPC.Client.Stream.put_payload(:deadline, deadline)
 
         {:error, reason} ->
@@ -270,10 +288,12 @@ if Code.ensure_loaded?(:gun) do
       {method, path, headers, data} = request_parts(stream, path, message, opts)
 
       case call_connection(conn_pid, fn ->
-             ConnectionProcess.request(conn_pid, method, path, headers, data, deadline)
+             ConnectionProcess.request(conn_pid, method, path, headers, data, deadline,
+               cancel: opts[:cancel]
+             )
            end) do
-        {:ok, %{stream_ref: stream_ref, response_pid: response_pid}} ->
-          {:ok, stream_ref, response_pid}
+        {:ok, %{stream_ref: stream_ref, response_pid: response_pid} = response} ->
+          {:ok, stream_ref, response_pid, response[:conn_pid]}
 
         {:error, reason} ->
           {:error, reason}
@@ -322,12 +342,15 @@ if Code.ensure_loaded?(:gun) do
       headers = request_headers(stream, opts, "POST")
 
       case call_connection(conn_pid, fn ->
-             ConnectionProcess.open_stream(conn_pid, path, headers, deadline)
+             ConnectionProcess.open_stream(conn_pid, path, headers, deadline,
+               cancel: opts[:cancel]
+             )
            end) do
-        {:ok, %{stream_ref: stream_ref, response_pid: response_pid}} ->
+        {:ok, %{stream_ref: stream_ref, response_pid: response_pid} = response} ->
           stream
           |> GRPC.Client.Stream.put_payload(:stream_ref, stream_ref)
           |> GRPC.Client.Stream.put_payload(:response_pid, response_pid)
+          |> GRPC.Client.Stream.put_payload(:lane, response[:conn_pid])
           |> GRPC.Client.Stream.put_payload(:deadline, deadline)
 
         {:error, reason} ->
@@ -340,8 +363,8 @@ if Code.ensure_loaded?(:gun) do
     @impl true
     def send_data(%{payload: %{request_error: _}} = stream, _message, _opts), do: stream
 
-    def send_data(%{channel: channel, payload: %{stream_ref: stream_ref}} = stream, message, opts) do
-      conn_pid = channel.adapter_payload[:conn_pid]
+    def send_data(%{payload: %{stream_ref: stream_ref}} = stream, message, opts) do
+      conn_pid = stream_conn_pid(stream)
       fin = if opts[:send_end_stream], do: :fin, else: :nofin
       {:ok, data, _} = GRPC.Message.to_data(message, opts)
 
@@ -351,8 +374,8 @@ if Code.ensure_loaded?(:gun) do
     @impl true
     def end_stream(%{payload: %{request_error: _}} = stream), do: stream
 
-    def end_stream(%{channel: channel, payload: %{stream_ref: stream_ref}} = stream) do
-      conn_pid = channel.adapter_payload[:conn_pid]
+    def end_stream(%{payload: %{stream_ref: stream_ref}} = stream) do
+      conn_pid = stream_conn_pid(stream)
 
       stream_data(stream, conn_pid, stream_ref, :fin, "")
     end
@@ -370,13 +393,14 @@ if Code.ensure_loaded?(:gun) do
     def cancel(%{payload: %{request_error: _}}), do: :ok
 
     def cancel(stream) do
-      %{
-        channel: %{adapter_payload: %{conn_pid: conn_pid}},
-        payload: %{stream_ref: stream_ref}
-      } = stream
+      %{payload: %{stream_ref: stream_ref}} = stream
 
-      ConnectionProcess.cancel(conn_pid, stream_ref)
+      ConnectionProcess.cancel(stream_conn_pid(stream), stream_ref)
     end
+
+    # A call that found an HTTP/1.1 connection busy runs on a connection of its own.
+    defp stream_conn_pid(%{payload: %{lane: lane}}) when is_pid(lane), do: lane
+    defp stream_conn_pid(%{channel: %{adapter_payload: %{conn_pid: conn_pid}}}), do: conn_pid
 
     @impl true
     def receive_data(%{payload: %{request_error: error}}, _opts), do: {:error, error}
@@ -1061,6 +1085,11 @@ if Code.ensure_loaded?(:gun) do
           {reason, {GenServer, :call, _}} -> {:error, reason}
           reason -> {:error, reason}
         end
+    end
+
+    defp put_request_error(stream, %GRPC.RPCError{} = error) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:local_pre_send, :connection_unavailable)
+      GRPC.Client.Stream.put_payload(stream, :request_error, error)
     end
 
     defp put_request_error(stream, reason) do

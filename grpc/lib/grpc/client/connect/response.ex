@@ -16,6 +16,8 @@ defmodule GRPC.Client.Connect.Response do
 
   import Bitwise
 
+  @error_body_cap 64 * 1024
+
   alias GRPC.Client.Connect
   alias GRPC.Transport.HTTP2
 
@@ -66,7 +68,18 @@ defmodule GRPC.Client.Connect.Response do
     end
   end
 
-  def consume(response, {:data, data}), do: {%{response | body: response.body <> data}, [], :ok}
+  # The body of an error response is read to be shown, and is capped for it.
+  def consume(response, {:data, data}) do
+    body = response.body <> data
+    limit = min(response.limit || GRPC.Client.MessageLimit.max_message_length(), @error_body_cap)
+
+    case GRPC.Client.MessageLimit.check_size(byte_size(body), limit) do
+      :ok -> {%{response | body: body}, [], :ok}
+      {:error, error} -> {%{response | ended: true}, [{:error, error}], :cancel}
+    end
+  end
+
+  def consume(%{ended: true} = response, :done), do: {response, [], :ok}
 
   def consume(%{status: status} = response, :done) when status != 200 do
     items = [{:trailers, trailers(response.headers)}, {:error, unary_error(response)}]

@@ -36,7 +36,7 @@ defmodule GRPC.Client.Connect.Response do
       kind: Connect.kind(stream),
       codec: stream.codec,
       response_mod: stream.response_mod,
-      limit: stream.max_receive_message_length,
+      limit: Map.get(stream, :max_receive_message_length),
       compressors:
         Enum.uniq(Enum.reject([stream.compressor | stream.accepted_compressors], &is_nil/1))
     }

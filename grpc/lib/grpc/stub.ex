@@ -489,7 +489,7 @@ defmodule GRPC.Stub do
       raise ArgumentError, "accepted_compressors is not a list"
     end
 
-    case acquire_channel(channel, opts) do
+    case cancel_before_start(opts) || acquire_channel(channel, opts) do
       {:error, %GRPC.RPCError{} = error} ->
         unavailable_result(error, stream, request, req_mod, res_mod, req_stream, opts)
 
@@ -564,6 +564,20 @@ defmodule GRPC.Stub do
             release_stream_lease(stream)
           end
         end
+    end
+  end
+
+  defp cancel_before_start(opts) do
+    case opts[:cancel] do
+      %GRPC.Client.CancelHandle{} = handle ->
+        if GRPC.Client.CancelHandle.canceled?(handle), do: {:error, @canceled_error}
+
+      nil ->
+        nil
+
+      other ->
+        raise ArgumentError,
+              ":cancel must be made with GRPC.Stub.new_cancel_handle/0, got: #{inspect(other)}"
     end
   end
 
@@ -879,6 +893,21 @@ defmodule GRPC.Stub do
     end
   end
 
+  # Lets `cancel/1` reach the call, and resets it at once when the handle was cancelled
+  # while the request was being sent. The reply then is the CANCELED error of the adapter.
+  defp register_cancel(stream, nil), do: stream
+
+  defp register_cancel(stream, %GRPC.Client.CancelHandle{} = handle) do
+    stream = GRPC.Client.Stream.put_payload(stream, :__cancel_handle__, handle)
+
+    case GRPC.Client.CancelHandle.register(handle, stream) do
+      :ok -> :ok
+      :canceled -> GRPC.Client.CancelHandle.reset(stream)
+    end
+
+    stream
+  end
+
   defp do_call(
          false,
          %{channel: channel} = stream,
@@ -897,6 +926,7 @@ defmodule GRPC.Stub do
       with :ok <- GRPC.Client.Stream.check_message_length(message) do
         s
         |> channel.adapter.send_request(message, opts)
+        |> register_cancel(opts[:cancel])
         |> recv(opts)
       end
     end
@@ -956,10 +986,33 @@ defmodule GRPC.Stub do
   end
 
   @doc """
-  Cancel a stream in a streaming client.
+  Makes a handle to cancel a unary or server-streaming call that is in flight.
 
-  After that, callings to `recv/2` will return a CANCEL error.
+  Pass it to the call with the `:cancel` option and cancel the call from any process with
+  `cancel/1`. A handle is for one call.
+
+  ## Examples
+
+      handle = GRPC.Stub.new_cancel_handle()
+      Task.start(fn -> Process.sleep(100); GRPC.Stub.cancel(handle) end)
+      {:error, %GRPC.RPCError{status: 1}} = MyService.Stub.slow(channel, request, cancel: handle)
   """
+  @spec new_cancel_handle() :: GRPC.Client.CancelHandle.t()
+  def new_cancel_handle, do: GRPC.Client.CancelHandle.new()
+
+  @doc """
+  Cancel a stream in a streaming client, or the call of a cancel handle.
+
+  The call of a handle is reset (RST_STREAM CANCEL on HTTP/2, the connection is closed on
+  HTTP/1.1), and its caller gets an error with the CANCELED status: the unary reply, or the
+  last item of the replies of a server-streaming call. Cancelling a handle whose call is
+  over, or has not started, has no effect on the connection: a call started with a
+  cancelled handle fails with CANCELED without sending anything.
+
+  After a stream is cancelled, callings to `recv/2` will return a CANCEL error.
+  """
+  def cancel(%GRPC.Client.CancelHandle{} = handle), do: GRPC.Client.CancelHandle.cancel(handle)
+
   def cancel(%{channel: channel} = stream) do
     release_stream_lease(stream)
 
@@ -1042,11 +1095,11 @@ defmodule GRPC.Stub do
       interface[:receive_data].(stream, opts)
     rescue
       e ->
-        release_stream_lease(stream)
+        finish(stream_lease_handle(stream), stream_cancel_handle(stream))
         reraise e, __STACKTRACE__
     catch
       kind, reason ->
-        release_stream_lease(stream)
+        finish(stream_lease_handle(stream), stream_cancel_handle(stream))
         :erlang.raise(kind, reason, __STACKTRACE__)
     else
       result ->
@@ -1113,6 +1166,11 @@ defmodule GRPC.Stub do
 
   defp release_lease_handle(_), do: :ok
 
+  defp finish(lease_handle, cancel_handle) do
+    unregister_cancel(cancel_handle)
+    release_lease_handle(lease_handle)
+  end
+
   defp streaming_response?(%{server_stream: true}), do: true
 
   defp streaming_response?(%{grpc_type: type})
@@ -1123,43 +1181,67 @@ defmodule GRPC.Stub do
 
   defp handle_recv_result(result, stream) do
     handle = stream_lease_handle(stream)
+    cancel_handle = stream_cancel_handle(stream)
 
     if streaming_response?(stream) do
       case result do
         {:ok, []} ->
-          release_lease_handle(handle)
+          finish(handle, cancel_handle)
           {:ok, []}
 
         {:ok, [], headers} ->
-          release_lease_handle(handle)
+          finish(handle, cancel_handle)
           {:ok, [], headers}
 
         {:ok, enum_stream} ->
-          {:ok, wrap_stream_with_lease_handle(enum_stream, handle)}
+          {:ok, wrap_replies(enum_stream, stream, handle)}
 
         {:ok, enum_stream, headers} ->
-          {:ok, wrap_stream_with_lease_handle(enum_stream, handle), headers}
+          {:ok, wrap_replies(enum_stream, stream, handle), headers}
 
         error_or_other ->
-          release_lease_handle(handle)
+          finish(handle, cancel_handle)
           error_or_other
       end
     else
-      release_lease_handle(handle)
+      finish(handle, cancel_handle)
       result
     end
   end
 
-  defp wrap_stream_with_lease_handle(enum_stream, nil), do: enum_stream
+  # The replies of a server-streaming call reset the stream when the caller halts them
+  # before the end, and drop the cancel handle of the call once they are over.
+  defp wrap_replies(enum_stream, stream, lease_handle) do
+    if lease_handle == nil and stream.grpc_type != :server_stream do
+      enum_stream
+    else
+      reset_on_halt? = stream.grpc_type == :server_stream
+      cancel_handle = stream_cancel_handle(stream)
 
-  defp wrap_stream_with_lease_handle(enum_stream, handle) do
-    Stream.transform(
-      enum_stream,
-      fn -> nil end,
-      fn item, acc -> {[item], acc} end,
-      fn _acc -> release_lease_handle(handle) end
-    )
+      Stream.transform(
+        enum_stream,
+        fn -> :atomics.new(1, []) end,
+        fn item, finished -> {[item], finished} end,
+        fn finished ->
+          :atomics.put(finished, 1, 1)
+          {[], finished}
+        end,
+        fn finished ->
+          if reset_on_halt? and :atomics.get(finished, 1) == 0,
+            do: GRPC.Client.CancelHandle.reset(stream)
+
+          unregister_cancel(cancel_handle)
+          release_lease_handle(lease_handle)
+        end
+      )
+    end
   end
+
+  defp stream_cancel_handle(%{payload: %{__cancel_handle__: handle}}), do: handle
+  defp stream_cancel_handle(_), do: nil
+
+  defp unregister_cancel(nil), do: :ok
+  defp unregister_cancel(handle), do: GRPC.Client.CancelHandle.unregister(handle)
 
   @valid_req_opts [
     :timeout,

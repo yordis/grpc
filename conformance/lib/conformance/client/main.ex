@@ -8,6 +8,8 @@ defmodule Conformance.Client.Main do
   alias Connectrpc.Conformance.V1.{ClientCompatRequest, ClientCompatResponse, ClientErrorResult}
 
   @max_in_flight 32
+  # A call the library never finishes must fail that one case, not stall every case behind it.
+  @call_deadline_ms 25_000
 
   def run(adapter) do
     # Treat stdin/stdout as raw bytes: the default device re-encodes as UTF-8.
@@ -46,6 +48,21 @@ defmodule Conformance.Client.Main do
   end
 
   defp execute(%ClientCompatRequest{test_name: name} = request, adapter) do
+    task = Task.async(fn -> run_call(request, adapter) end)
+
+    case Task.yield(task, @call_deadline_ms) || Task.shutdown(task, :brutal_kill) do
+      {:ok, response} ->
+        response
+
+      _ ->
+        %ClientCompatResponse{
+          test_name: name,
+          result: {:error, %ClientErrorResult{message: "call did not finish within #{@call_deadline_ms} ms"}}
+        }
+    end
+  end
+
+  defp run_call(%ClientCompatRequest{test_name: name} = request, adapter) do
     Conformance.Client.Call.run(request, adapter)
   rescue
     error ->

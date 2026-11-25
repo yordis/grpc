@@ -362,7 +362,7 @@ if Code.ensure_loaded?(:gun) do
 
     defp handle_fin_response(headers, opts) do
       # Trailers-only response: headers contain trailers, check status
-      with :ok <- parse_trailers(headers) do
+      with :ok <- parse_trailers(headers, nil) do
         if opts[:return_headers] do
           {:ok, [], %{headers: headers}}
         else
@@ -373,7 +373,7 @@ if Code.ensure_loaded?(:gun) do
 
     defp handle_streaming_nofin_response(stream, headers, opts, deadline) do
       compressor = get_compressor(headers, stream.accepted_compressors)
-      response = response_stream(:nofin, stream, opts, deadline, compressor)
+      response = response_stream(:nofin, stream, opts, deadline, compressor, headers)
 
       if opts[:return_headers] do
         {:ok, response, %{headers: headers}}
@@ -584,9 +584,11 @@ if Code.ensure_loaded?(:gun) do
            } = stream,
            opts,
            deadline,
-           compressor
+           compressor,
+           headers
          ) do
       state = %{
+        headers: headers,
         payload: payload,
         stream: stream,
         buffer: <<>>,
@@ -671,7 +673,8 @@ if Code.ensure_loaded?(:gun) do
 
         _ when ended ->
           # The stream ended without a `grpc-status`.
-          {{:error, missing_status_error(buffer)}, %{buffer: <<>>, fin: true, fin_resp: nil}}
+          error = %{missing_status_error(buffer) | headers: stream.headers}
+          {{:error, error}, %{buffer: <<>>, fin: true, fin_resp: nil}}
 
         _ ->
           read_stream(Map.put(stream, :need_more, true))
@@ -789,7 +792,7 @@ if Code.ensure_loaded?(:gun) do
            body,
            trailers
          ) do
-      with :ok <- parse_trailers(trailers),
+      with :ok <- parse_trailers(trailers, headers),
            compressor <- get_compressor(headers, accepted_compressors),
            body <- get_body(codec, body),
            :ok <- GRPC.Client.MessageLimit.check_prefix(body),
@@ -810,7 +813,7 @@ if Code.ensure_loaded?(:gun) do
     defp update_stream_with_trailers(stream, trailers, return_headers?) do
       trailers = GRPC.Transport.HTTP2.decode_headers(trailers)
 
-      case parse_trailers(trailers) do
+      case parse_trailers(trailers, stream.headers) do
         :ok ->
           fin_resp = if return_headers?, do: {:trailers, trailers}
 
@@ -824,7 +827,15 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
-    defp parse_trailers(%{"grpc-status" => value} = trailers) do
+    # The error carries the response headers and the trailers it came from.
+    defp parse_trailers(trailers, headers) do
+      case check_trailers(trailers) do
+        :ok -> :ok
+        {:error, error} -> {:error, %{error | headers: headers, trailers: trailers}}
+      end
+    end
+
+    defp check_trailers(%{"grpc-status" => value} = trailers) do
       case Integer.parse(value) do
         {status, ""} ->
           parse_status(status, trailers)
@@ -834,7 +845,7 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
-    defp parse_trailers(_trailers), do: {:error, missing_status_error(<<>>)}
+    defp check_trailers(_trailers), do: {:error, missing_status_error(<<>>)}
 
     defp parse_status(status, trailers) do
       if status == GRPC.Status.ok() do

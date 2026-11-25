@@ -263,7 +263,7 @@ defmodule GRPC.Integration.ServerTest do
           assert %GRPC.RPCError{
                    status: GRPC.Status.unauthenticated(),
                    message: "Please authenticate"
-                 } == reply
+                 } == %{reply | headers: nil, trailers: nil}
         end)
       end)
 
@@ -277,9 +277,10 @@ defmodule GRPC.Integration.ServerTest do
           {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
           req = %Helloworld.HelloRequest{name: "unknown error"}
 
-          assert {:error,
-                  %GRPC.RPCError{message: "Internal Server Error", status: GRPC.Status.unknown()}} ==
-                   channel |> Helloworld.Greeter.Stub.say_hello(req)
+          assert {:error, reply} = channel |> Helloworld.Greeter.Stub.say_hello(req)
+
+          assert %GRPC.RPCError{message: "Internal Server Error", status: GRPC.Status.unknown()} ==
+                   %{reply | headers: nil, trailers: nil}
         end)
       end)
 
@@ -398,8 +399,8 @@ defmodule GRPC.Integration.ServerTest do
     run_server([FeatureErrorServer], fn port ->
       {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
       rect = %Routeguide.Rectangle{}
-      error = %GRPC.RPCError{message: "Please authenticate", status: 16}
-      assert {:error, ^error} = channel |> Routeguide.RouteGuide.Stub.list_features(rect)
+      assert {:error, %GRPC.RPCError{message: "Please authenticate", status: 16}} =
+               channel |> Routeguide.RouteGuide.Stub.list_features(rect)
     end)
   end
 

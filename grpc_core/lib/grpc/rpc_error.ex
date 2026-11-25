@@ -51,7 +51,20 @@ defmodule GRPC.RPCError do
   See `GRPC.Status` for more details on possible statuses.
   """
 
-  defexception [:status, :message, :details]
+  @typedoc """
+  `:headers` and `:trailers` are set by a client when the server sent them with the
+  error: the initial response headers and the trailers, as maps with the values
+  decoded. They are `nil` when there were none.
+  """
+  @type t :: %__MODULE__{
+          status: non_neg_integer() | nil,
+          message: String.t() | nil,
+          details: list() | nil,
+          headers: %{optional(String.t()) => String.t()} | nil,
+          trailers: %{optional(String.t()) => String.t()} | nil
+        }
+
+  defexception [:status, :message, :details, :headers, :trailers]
 
   defguard is_rpc_error(e, status) when is_struct(e, __MODULE__) and e.status == status
 

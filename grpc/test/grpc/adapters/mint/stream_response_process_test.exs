@@ -164,10 +164,12 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcessTest do
             state
           )
 
-        expected_error = {:error, %GRPC.RPCError{message: "Internal Server Error", status: 2}}
-
         assert {:reply, :ok, new_state, {:continue, :produce_response}} = response
-        assert :queue.to_list(new_state.responses) == [expected_error]
+
+        assert [{:error, %GRPC.RPCError{message: "Internal Server Error", status: 2} = error}] =
+                 :queue.to_list(new_state.responses)
+
+        assert error.trailers["grpc-status"] == "2"
       end,
       do: [
         {%{type: :headers, is_header_enabled: false}},

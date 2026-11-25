@@ -12,7 +12,10 @@ defmodule GRPC.TestCerts do
   @key_prefix {__MODULE__, :files}
 
   def init do
-    dir = Path.join(System.tmp_dir!(), "grpc_test_certs_#{System.unique_integer([:positive])}")
+    # Test runs of other projects, or of other checkouts, share the temporary directory and
+    # start their unique integers from the same value, so the name carries a random part.
+    suffix = Base.url_encode64(:crypto.strong_rand_bytes(9), padding: false)
+    dir = Path.join(System.tmp_dir!(), "grpc_test_certs_#{suffix}")
     File.mkdir_p!(dir)
     ExUnit.after_suite(fn _ -> File.rm_rf(dir) end)
     :persistent_term.put(@key_prefix, write_certs(dir))

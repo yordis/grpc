@@ -88,6 +88,16 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   end
 
   @doc """
+  Ends the response because the caller cancelled the request. Unlike `done/1`,
+  a response that has no `grpc-status` is not an error here.
+  """
+  def cancel(pid) do
+    GenServer.call(pid, {:consume_response, :cancel})
+  catch
+    :exit, {reason, {GenServer, :call, _args}} -> {:error, reason}
+  end
+
+  @doc """
   Consume an incoming data or trailers/headers.
 
   Returns `:ok`, `:cancel` when the request should be reset because the
@@ -112,7 +122,9 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       done: false,
       from: nil,
       compressor: nil,
-      failed: false
+      failed: false,
+      # The response ended with a `grpc-status`, or with an error, so it is complete.
+      terminated: false
     }
 
     {:ok, state}
@@ -156,6 +168,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
           | buffer: <<>>,
             responses: :queue.in({:error, error}, new_responses),
             failed: true,
+            terminated: true,
             done: true
         }
 
@@ -170,8 +183,10 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       )
       when type in @header_types do
     state = update_compressor({type, headers}, state)
-    new_responses = :queue.in(get_headers_response(headers, type), responses)
-    {:reply, :ok, %{state | responses: new_responses}, {:continue, :produce_response}}
+    response = get_headers_response(headers, type)
+    new_responses = :queue.in(response, responses)
+    state = %{state | responses: new_responses, terminated: state.terminated or terminal?(response)}
+    {:reply, :ok, state, {:continue, :produce_response}}
   end
 
   def handle_call(
@@ -181,8 +196,10 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       )
       when type in @header_types do
     state = update_compressor({type, headers}, state)
+    response = get_headers_response(headers, type)
+    state = %{state | terminated: state.terminated or terminal?(response)}
 
-    case get_headers_response(headers, type) do
+    case response do
       {:error, _rpc_error} = error ->
         {:reply, :ok, %{state | responses: :queue.in(error, responses)},
          {:continue, :produce_response}}
@@ -202,8 +219,21 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
         _from,
         %{responses: responses} = state
       ) do
-    {:reply, :ok, %{state | responses: :queue.in(error, responses)},
+    {:reply, :ok, %{state | responses: :queue.in(error, responses), terminated: true},
      {:continue, :produce_response}}
+  end
+
+  # The stream ended. Without a `grpc-status` or an error the call did not complete.
+  def handle_call({:consume_response, :done}, _from, %{terminated: false} = state) do
+    error = {:error, missing_status_error(state.buffer)}
+    responses = :queue.in(error, state.responses)
+
+    {:reply, :ok, %{state | responses: responses, terminated: true, done: true},
+     {:continue, :produce_response}}
+  end
+
+  def handle_call({:consume_response, :cancel}, _from, state) do
+    {:reply, :ok, %{state | terminated: true, done: true}, {:continue, :produce_response}}
   end
 
   def handle_call({:consume_response, :done}, _from, state) do
@@ -273,20 +303,56 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
   defp get_headers_response(headers, type) do
     decoded_trailers = GRPC.Transport.HTTP2.decode_headers(headers)
-    status = String.to_integer(decoded_trailers["grpc-status"] || "0")
 
-    if status == GRPC.Status.ok() do
-      {type, decoded_trailers}
-    else
-      rpc_error =
-        GRPC.RPCError.from_grpc_status_details_bin(%{
-          status: status,
-          message: decoded_trailers["grpc-message"],
-          encoded_details_bin: decoded_trailers["grpc-status-details-bin"]
-        })
+    case parse_status(decoded_trailers["grpc-status"]) do
+      nil when type == :trailers ->
+        {:error, missing_status_error(<<>>)}
 
-      {:error, rpc_error}
+      nil ->
+        {type, decoded_trailers}
+
+      :error ->
+        {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "Invalid grpc-status.")}
+
+      status ->
+        if status == GRPC.Status.ok() do
+          {type, decoded_trailers}
+        else
+          rpc_error =
+            GRPC.RPCError.from_grpc_status_details_bin(%{
+              status: status,
+              message: decoded_trailers["grpc-message"],
+              encoded_details_bin: decoded_trailers["grpc-status-details-bin"]
+            })
+
+          {:error, rpc_error}
+        end
     end
+  end
+
+  defp parse_status(nil), do: nil
+
+  defp parse_status(value) do
+    case Integer.parse(value) do
+      {status, ""} -> status
+      _ -> :error
+    end
+  end
+
+  # An error, or headers carrying a `grpc-status`, end the response.
+  defp terminal?({:error, _}), do: true
+  defp terminal?({_type, %{"grpc-status" => _}}), do: true
+  defp terminal?(_response), do: false
+
+  defp missing_status_error(<<>>) do
+    GRPC.RPCError.exception(GRPC.Status.internal(), "Missing grpc-status in the response.")
+  end
+
+  defp missing_status_error(_incomplete_message) do
+    GRPC.RPCError.exception(
+      GRPC.Status.internal(),
+      "The response ended in the middle of a message."
+    )
   end
 
   defp update_compressor({:headers, headers}, state) do

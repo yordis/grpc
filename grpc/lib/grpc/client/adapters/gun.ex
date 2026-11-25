@@ -422,6 +422,9 @@ if Code.ensure_loaded?(:gun) do
         data = {:data, _} ->
           data
 
+        data = {:data_fin, _} ->
+          data
+
         trailers = {:trailers, _} ->
           trailers
 
@@ -443,7 +446,7 @@ if Code.ensure_loaded?(:gun) do
           response_headers(status, headers, fin)
 
         {:data, :fin, data} ->
-          {:data, data}
+          {:data_fin, data}
 
         {:data, :nofin, data} ->
           {:data, data}
@@ -536,6 +539,10 @@ if Code.ensure_loaded?(:gun) do
             recv_body(stream, stream_payload, acc, new_size, deadline)
           end
 
+        # The last frame carried END_STREAM, so there are no trailers and no grpc-status.
+        {:data_fin, data} ->
+          {:ok, IO.iodata_to_binary([acc, data]), %{}}
+
         {:trailers, trailers} ->
           body = IO.iodata_to_binary(acc)
           {:ok, body, GRPC.Transport.HTTP2.decode_headers(trailers)}
@@ -589,7 +596,8 @@ if Code.ensure_loaded?(:gun) do
         response_mod: res_mod,
         codec: codec,
         compressor: compressor,
-        deadline: deadline
+        deadline: deadline,
+        ended: false
       }
 
       Stream.unfold(state, fn s -> read_stream(s) end)
@@ -616,6 +624,13 @@ if Code.ensure_loaded?(:gun) do
           |> Map.put(:buffer, buffer <> data)
           |> read_stream()
 
+        {:data_fin, data} ->
+          stream
+          |> Map.put(:need_more, false)
+          |> Map.put(:ended, true)
+          |> Map.put(:buffer, buffer <> data)
+          |> read_stream()
+
         {:trailers, trailers} ->
           update_stream_with_trailers(stream, trailers, opts[:return_headers])
 
@@ -631,7 +646,8 @@ if Code.ensure_loaded?(:gun) do
              response_mod: res_mod,
              codec: codec,
              compressor: compressor,
-             opts: opts
+             opts: opts,
+             ended: ended
            } = stream
          ) do
       case get_message(buffer, compressor) do
@@ -653,9 +669,28 @@ if Code.ensure_loaded?(:gun) do
           new_stream = Map.put(stream, :buffer, rest)
           {{:ok, reply}, new_stream}
 
+        _ when ended ->
+          # The stream ended without a `grpc-status`.
+          {{:error, missing_status_error(buffer)}, %{buffer: <<>>, fin: true, fin_resp: nil}}
+
         _ ->
           read_stream(Map.put(stream, :need_more, true))
       end
+    end
+
+    defp missing_status_error(<<>>) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+      GRPC.RPCError.exception(GRPC.Status.internal(), "Missing grpc-status in the response.")
+    end
+
+    defp missing_status_error(_incomplete_message) do
+      GRPC.Client.Telemetry.mark_rpc_failure(:remote, nil)
+
+      GRPC.RPCError.exception(
+        GRPC.Status.internal(),
+        "The response ended in the middle of a message."
+      )
     end
 
     # A message over `:max_message_length` ends the stream with an error item.
@@ -789,9 +824,19 @@ if Code.ensure_loaded?(:gun) do
       end
     end
 
-    defp parse_trailers(trailers) do
-      status = String.to_integer(trailers["grpc-status"])
+    defp parse_trailers(%{"grpc-status" => value} = trailers) do
+      case Integer.parse(value) do
+        {status, ""} ->
+          parse_status(status, trailers)
 
+        _ ->
+          {:error, GRPC.RPCError.exception(GRPC.Status.internal(), "Invalid grpc-status.")}
+      end
+    end
+
+    defp parse_trailers(_trailers), do: {:error, missing_status_error(<<>>)}
+
+    defp parse_status(status, trailers) do
       if status == GRPC.Status.ok() do
         :ok
       else

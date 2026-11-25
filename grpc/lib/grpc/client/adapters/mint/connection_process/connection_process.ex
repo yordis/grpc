@@ -233,7 +233,11 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     def handle_call({:cancel_request, request_ref}, _from, state)
         when State.has_request_ref(state, request_ref) do
-      state = process_response({:done, request_ref}, state)
+      state
+      |> State.stream_response_pid(request_ref)
+      |> StreamResponseProcess.cancel()
+
+      state = drop_request(state, request_ref)
 
       case Mint.HTTP2.cancel_request(state.conn, request_ref) do
         {:ok, conn} -> {:reply, :ok, State.update_conn(state, conn)}

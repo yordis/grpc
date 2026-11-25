@@ -1,6 +1,6 @@
-# Scope: all three protocols. The library has no Connect protocol implementation,
-# so every PROTOCOL_CONNECT case is expected to fail. This config measures that gap;
-# use grpc.yaml for the protocols the library implements.
+# Scope: the server on all three protocols (Connect, gRPC, gRPC-Web) over HTTP/1.1 and HTTP/2,
+# every feature on. Measured with no known-failing list:
+#   conformance/run.sh config/full.yaml
 features:
   versions: [HTTP_VERSION_1, HTTP_VERSION_2]
   protocols: [PROTOCOL_CONNECT, PROTOCOL_GRPC, PROTOCOL_GRPC_WEB]

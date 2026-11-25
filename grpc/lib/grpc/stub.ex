@@ -112,6 +112,14 @@ defmodule GRPC.Stub do
     * `:http_method` - `:get` sends a unary call of a channel with `protocol: :connect` as an
       HTTP GET, with the message in the query. Only a method marked `NO_SIDE_EFFECTS` takes
       it. Default is `:post`.
+    * `:max_receive_message_length` - the largest reply message, in bytes, of this call. It
+      overrides the one set in `connect/2`, which overrides the `:max_message_length`
+      application setting. A larger reply fails with `RESOURCE_EXHAUSTED`.
+    * `:cancel` - a handle from `new_cancel_handle/0`, to cancel a unary or server-streaming
+      call with `cancel/1`.
+
+  Halting the replies of a server-streaming call before their end (with `Enum.take/2`, for
+  instance) resets the stream, so the server stops working on it.
 
   Any other option raises `ArgumentError`.
 

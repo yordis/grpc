@@ -14,9 +14,22 @@ defmodule Conformance.LauncherTest do
   test "a server starts while another process holds the build lock" do
     hold_build_lock()
 
-    server = start("server")
+    server = start(Path.join(@bin, "server"))
     Port.command(server, @request)
     assert <<size::32-big, _::binary-size(size)>> = handshake(server)
+  end
+
+  # The runner reads length-prefixed messages from stdout, so a log line or any other text
+  # there is read as a size. Only the protocol may write to it.
+  test "text written to stdout while a server starts does not reach the protocol stream" do
+    expression = ~s[IO.puts("noise"); Conformance.Main.run()]
+    server = start(Path.join(@bin, "launch"), [expression])
+    Port.command(server, @request)
+
+    assert <<size::32-big, response::binary-size(size)>> = handshake(server)
+
+    assert %Connectrpc.Conformance.V1.ServerCompatResponse{host: "127.0.0.1"} =
+             Connectrpc.Conformance.V1.ServerCompatResponse.decode(response)
   end
 
   # Takes the lock the way a compile does and keeps it until the test process ends.
@@ -46,8 +59,8 @@ defmodule Conformance.LauncherTest do
     port
   end
 
-  defp start(program) do
-    port = Port.open({:spawn_executable, Path.join(@bin, program)}, [:binary, :exit_status])
+  defp start(program, args \\ []) do
+    port = Port.open({:spawn_executable, program}, [:binary, :exit_status, args: args])
     stop_on_exit(port)
     port
   end
@@ -66,7 +79,12 @@ defmodule Conformance.LauncherTest do
         acc = acc <> data
 
         case acc do
-          <<size::32-big, rest::binary>> when byte_size(rest) >= size -> acc
+          <<size::32-big, _::binary>> when size > 65_536 ->
+            flunk("stdout does not start with a message: #{inspect(acc)}")
+
+          <<size::32-big, rest::binary>> when byte_size(rest) >= size ->
+            acc
+
           _ -> handshake(port, acc)
         end
 

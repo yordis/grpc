@@ -526,8 +526,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
       if error, do: {:error, error}, else: :ok
     end
 
+    # A client stream's request is opened before `recv/2` says whether the caller wants
+    # the headers, so it keeps them, as the streaming calls do.
     defp return_headers_for_request?(%GRPC.Client.Stream{grpc_type: type}, _opts)
-         when type in [:bidirectional_stream, :server_stream] do
+         when type in [:bidirectional_stream, :server_stream, :client_stream] do
       true
     end
 

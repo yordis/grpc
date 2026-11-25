@@ -65,10 +65,12 @@ defmodule Conformance.LauncherTest do
     port
   end
 
-  # A server does not stop when its stdin closes, so the test stops the OS process.
+  # A server does not stop when its stdin closes, so the test stops the OS process. That runs
+  # after the test, when the process may be gone and its pid taken by another program.
   defp stop_on_exit(port) do
     {:os_pid, os_pid} = Port.info(port, :os_pid)
-    on_exit(fn -> System.cmd("kill", [Integer.to_string(os_pid)], stderr_to_stdout: true) end)
+    identity = Conformance.OSProcess.identity(os_pid)
+    on_exit(fn -> Conformance.OSProcess.stop(os_pid, identity) end)
   end
 
   # The wait only bounds a hang. A launcher that waits on the lock never answers, so the

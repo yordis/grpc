@@ -123,7 +123,8 @@ defmodule GRPC.Server do
           :service,
           codecs: [GRPC.Codec.Proto, GRPC.Codec.WebText, GRPC.Codec.JSON],
           compressors: [],
-          http_transcode: false
+          http_transcode: false,
+          connect: false
         ])
 
       service_mod = opts[:service]
@@ -241,6 +242,7 @@ defmodule GRPC.Server do
       def __meta__(:service), do: unquote(service_mod)
       def __meta__(:codecs), do: unquote(codecs)
       def __meta__(:compressors), do: unquote(compressors)
+      def __meta__(:connect), do: unquote(opts[:connect])
       def __meta__(:routes), do: unquote(routes)
     end
   end

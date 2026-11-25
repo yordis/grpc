@@ -1,12 +1,16 @@
 #!/bin/sh
 # Downloads the pinned connectconformance release for this host into
-# conformance/.runner/ and verifies it against the release checksums file.
+# conformance/.runner/ and verifies it against a sha256 pinned in this script, so a
+# compromised release host cannot supply both the tarball and its checksum.
 # Usage: conformance/bin/fetch-runner [version]   (default: CONNECTCONFORMANCE_VERSION or v1.0.7)
+#
+# To bump the version: add entries for the new version to pinned_sha256 below, copying the
+# values from connectconformance_<version>_checksums.txt of the official release and
+# checking them against the downloaded tarballs. A version without a pinned entry fails.
 set -eu
 version="${1:-${CONNECTCONFORMANCE_VERSION:-v1.0.7}}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$here/.runner"
-num="${version#v}"
 os="$(uname -s)"
 arch="$(uname -m)"
 case "$os" in Darwin | Linux) ;; *) echo "fetch-runner: unsupported OS: $os" >&2; exit 1 ;; esac
@@ -16,8 +20,18 @@ case "$arch" in
   *) echo "fetch-runner: unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 asset="connectconformance-$version-$os-$arch.tar.gz"
-checksums="connectconformance_${num}_checksums.txt"
 base="https://github.com/connectrpc/conformance/releases/download/$version"
+
+pinned_sha256() {
+  case "$1" in
+    v1.0.7-Darwin-arm64) echo 6e3534f8a39ad91843913af80fa7f68fdc266a71560b00ad078a0637d380100b ;;
+    v1.0.7-Darwin-x86_64) echo 969de3f343c67bebe37db2a1641c2ced15d44ddd358400de24cbb53e28d3a561 ;;
+    v1.0.7-Linux-aarch64) echo c43e11cdca4cf7936a502fa25e1d7f27a6475b806d0ab5647668a5777b9d2121 ;;
+    v1.0.7-Linux-x86_64) echo cf2d7c671c8cfbdfba5e48dc58cbe0b2db01fa7b1c160ecf060f20d27479d63c ;;
+  esac
+}
+expected="$(pinned_sha256 "$version-$os-$arch")"
+[ -n "$expected" ] || { echo "fetch-runner: no pinned sha256 for $version on $os-$arch; add one to pinned_sha256" >&2; exit 1; }
 
 if [ -x "$dest/connectconformance" ] && [ "$(cat "$dest/VERSION" 2>/dev/null)" = "$version" ]; then
   echo "$dest/connectconformance ($version) already present"
@@ -27,10 +41,7 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 curl -fsSL -o "$tmp/$asset" "$base/$asset"
-curl -fsSL -o "$tmp/$checksums" "$base/$checksums"
 
-expected="$(awk -v f="$asset" '$2 == f { print $1 }' "$tmp/$checksums")"
-[ -n "$expected" ] || { echo "fetch-runner: $asset not listed in $checksums" >&2; exit 1; }
 if command -v sha256sum >/dev/null 2>&1; then
   actual="$(sha256sum "$tmp/$asset" | awk '{ print $1 }')"
 else
@@ -49,4 +60,4 @@ bin="$(find "$tmp" -name connectconformance -type f | head -n 1)"
 [ -n "$bin" ] || { echo "fetch-runner: connectconformance not found in archive" >&2; exit 1; }
 install -m 755 "$bin" "$dest/connectconformance"
 echo "$version" > "$dest/VERSION"
-echo "installed $dest/connectconformance ($version, sha256 verified)"
+echo "installed $dest/connectconformance ($version, sha256 matches pin)"

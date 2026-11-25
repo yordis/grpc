@@ -296,6 +296,23 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       assert {[{request_ref, <<1, 2, 3>>, self()}], []} == new_state.request_stream_queue
       assert new_state.conn == state.conn
     end
+
+    test "drops the body of a request that is gone, such as one that was cancelled", %{
+      request_ref: request_ref,
+      state: state
+    } do
+      {_ref, state_without_ref} = pop_in(state.requests[request_ref])
+
+      response =
+        ConnectionProcess.handle_call(
+          {:stream_body, request_ref, <<1, 2, 3>>},
+          self(),
+          state_without_ref
+        )
+
+      assert {:reply, :ok, new_state} = response
+      assert :queue.is_empty(new_state.request_stream_queue)
+    end
   end
 
   describe "handle_call/2 - cancel_request" do
@@ -769,8 +786,16 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
           stream_response_pid: dead_pid
         )
 
-      %{stream: stream, pid: live_pid} =
-        start_feature_request(pid, method, get_feature, headers)
+      # The server sends nothing for a request that has no body, so once this
+      # call returns the connection process has nothing else to handle.
+      _ = :sys.get_state(pid)
+
+      # Hold the connection process while the queued write is put in place and
+      # the response process is killed, so that the exit is the next thing it
+      # handles. Any frame that arrived first would flush the queued write to
+      # the still registered request and reply `:ok`, which is correct, and
+      # is not what this test is about.
+      :ok = :sys.suspend(pid)
 
       # A body write still waiting for flow control when the process exits.
       from = {self(), make_ref()}
@@ -781,6 +806,8 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       end)
 
       Process.exit(dead_pid, :kill)
+      await(fn -> down_message_queued?(pid, dead_pid) end)
+      :ok = :sys.resume(pid)
 
       assert_receive {:telemetry, [:grpc, :client, :mint, :stream_response, :dead], %{},
                       %{request_ref: ^dead_ref, stream_response_pid: ^dead_pid}},
@@ -795,7 +822,10 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       {_pid, tag} = from
       assert_receive {^tag, {:error, %GRPC.RPCError{status: 1}}}
 
-      # The other request on the same connection still completes.
+      # Another request on the same connection still completes.
+      %{stream: stream, pid: live_pid} =
+        start_feature_request(pid, method, get_feature, headers)
+
       assert [{:ok, %Routeguide.Feature{name: "1,2"}}] = Enum.to_list(stream)
       assert Process.alive?(pid)
       assert_process_exits(live_pid)
@@ -826,9 +856,16 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
 
       # The connection process is blocked on the suspended process, so this
       # request waits in its mailbox until the process is killed below.
+      test = self()
+
       live_request =
         Task.async(fn ->
-          start_feature_request(pid, method, "/routeguide.RouteGuide/GetFeature", headers)
+          request =
+            start_feature_request(pid, method, "/routeguide.RouteGuide/GetFeature", headers)
+
+          # The response process ends with the process that started it.
+          send(test, {:started, request})
+          Process.sleep(:infinity)
         end)
 
       Process.exit(dead_pid, :kill)
@@ -837,10 +874,11 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
                       %{request_ref: ^dead_ref, stream_response_pid: ^dead_pid}},
                      1_000
 
-      %{stream: stream, pid: live_pid} = Task.await(live_request)
+      assert_receive {:started, %{stream: stream, pid: live_pid}}, 5_000
       assert [{:ok, %Routeguide.Feature{name: "1,2"}}] = Enum.to_list(stream)
       assert Process.alive?(pid)
       assert_process_exits(live_pid)
+      Task.shutdown(live_request, :brutal_kill)
       assert %{} == :sys.get_state(pid).requests
       assert :queue.is_empty(:sys.get_state(pid).request_stream_queue)
     end
@@ -1135,6 +1173,11 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       pid: response_pid,
       ref: ref
     }
+  end
+
+  defp down_message_queued?(pid, down_pid) do
+    {:messages, messages} = Process.info(pid, :messages)
+    Enum.any?(messages, &match?({:DOWN, _, :process, ^down_pid, _}, &1))
   end
 
   # The process stops itself once its stream is done.

@@ -2,7 +2,27 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * New `GRPC.Server.Stream.timeout_ms/1` returns the timeout the client sent, in milliseconds, or `nil`. It reads `grpc-timeout` for gRPC and gRPC-Web and `connect-timeout-ms` for Connect, so a handler or interceptor needs no header parsing. `GRPC.Server.Stream` has a new `:timeout_ms` field.
+
+### Behavior Changes
+
+  * The Connect protocol is opt-in: a server serves it only when it sets `use GRPC.Server, service: ..., connect: true`. With the option off, which is the default, a request keeps the protocol it had before Connect: a `POST` with `application/json` to a gRPC path is a transcoded call, with `grpc-status` trailers and the gRPC to HTTP status map, not a Connect call with a JSON error body. `application/proto`, `application/connect+*` and `GET ?encoding=...` are served only with the option on. Upgrade note: set `connect: true` on each `use GRPC.Server` that should answer Connect clients (the Connect conformance server does so).
+
+  * `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. If you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
+
 ### Bug Fixes
+
+  * A Connect request whose content type does not fit the method is refused with HTTP 415, and `Accept-Post` names the content types the method takes. A unary content type (`application/proto`, `application/json`) on a streaming method used to give a server stream only its last message, and a client stream read the unary body as envelopes. The streaming content types (`application/connect+*`) on a unary method are refused too. Upgrade note: a Connect client must use the unary content types for unary methods and the streaming ones for the rest, as the Connect spec says.
+
+  * A call's deadline timer is cancelled when its reply is complete, and a deadline that still arrives after the reply is ignored. Before, a Connect unary call whose deadline fired between the reply and the end of the RPC process made the request process crash with `response_already_sent`, and a Ranch error report. No upgrade action is needed.
+
+  * An HTTP/1.1 connection that sends no request is closed again, after 60 seconds. The adapter had set Cowboy's `request_timeout` to `:idle_timeout`, which defaults to `:infinity`, so idle sockets lived forever and could fill `:max_connections`. The `:request_timeout` adapter option (default `60000`) is independent of `:idle_timeout`. The default is above Cowboy's 5 seconds on purpose, so a client that reuses a kept-alive connection does not hit a close. Upgrade note: set `adapter_opts: [request_timeout: ...]` to change it, or `:infinity` to restore the previous behavior.
+
+  * The default `:max_body_size` (4 MiB) no longer cuts off a long-lived client-streaming or bidirectional call once its messages add up to 4 MiB. The default applies only to a call whose request is one body (unary and server streaming, over gRPC, gRPC-Web, Connect and transcoding). A request stream is bounded per message by `:max_message_length`. An explicit `:max_body_size` still caps the total of a request stream. Upgrade note: if you set `:max_body_size` only to cap a stream's total, it still does; if you relied on the unreleased default to cap streams, set `:max_body_size` explicitly.
+
+  * The 4 MiB default of `:max_body_size` now applies. `GRPC.Server.start_endpoint/3` passed `nil` as the default, and the Cowboy handler compared a number to `nil`, which is never over, so a server started without the option had no limit. The handler now treats an absent or `nil` option as 4 MiB, and `:infinity` removes the limit. A server that relied on the missing limit to accept a request over 4 MiB must set `:max_body_size` (a behavior change).
 
   * A server stream no longer hangs when two calls on one connection fill Cowboy's send buffers. If a stream waited for its stream buffer to drain and the connection buffer then filled, the second alarm made the stream forget it was waiting. When the buffers drained it got no ack, and the call never ended, however fast the client read (#652).
 

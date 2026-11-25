@@ -16,6 +16,8 @@ defmodule GRPC.Client.Connect.Response do
 
   import Bitwise
 
+  @error_body_cap 64 * 1024
+
   alias GRPC.Client.Connect
   alias GRPC.Transport.HTTP2
 
@@ -25,6 +27,7 @@ defmodule GRPC.Client.Connect.Response do
     :response_mod,
     :status,
     :headers,
+    :limit,
     compressors: [],
     ended: false,
     body: <<>>
@@ -35,6 +38,7 @@ defmodule GRPC.Client.Connect.Response do
       kind: Connect.kind(stream),
       codec: stream.codec,
       response_mod: stream.response_mod,
+      limit: Map.get(stream, :max_receive_message_length),
       compressors:
         Enum.uniq(Enum.reject([stream.compressor | stream.accepted_compressors], &is_nil/1))
     }
@@ -54,7 +58,28 @@ defmodule GRPC.Client.Connect.Response do
   def consume(%{kind: :stream, status: 200} = response, {:data, data}),
     do: drain(%{response | body: response.body <> data}, [])
 
-  def consume(response, {:data, data}), do: {%{response | body: response.body <> data}, [], :ok}
+  # A unary reply is one body. One over the limit is not read to the end: the request is reset.
+  def consume(%{kind: :unary, status: 200} = response, {:data, data}) do
+    body = response.body <> data
+
+    case GRPC.Client.MessageLimit.check_size(byte_size(body), response.limit) do
+      :ok -> {%{response | body: body}, [], :ok}
+      {:error, error} -> {%{response | ended: true}, [{:error, error}], :cancel}
+    end
+  end
+
+  # The body of an error response is read to be shown, and is capped for it.
+  def consume(response, {:data, data}) do
+    body = response.body <> data
+    limit = min(response.limit || GRPC.Client.MessageLimit.max_message_length(), @error_body_cap)
+
+    case GRPC.Client.MessageLimit.check_size(byte_size(body), limit) do
+      :ok -> {%{response | body: body}, [], :ok}
+      {:error, error} -> {%{response | ended: true}, [{:error, error}], :cancel}
+    end
+  end
+
+  def consume(%{ended: true} = response, :done), do: {response, [], :ok}
 
   def consume(%{status: status} = response, :done) when status != 200 do
     items = [{:trailers, trailers(response.headers)}, {:error, unary_error(response)}]
@@ -106,7 +131,7 @@ defmodule GRPC.Client.Connect.Response do
   # Bit 0 of the flag says the payload is compressed, bit 1 that it is the end of the
   # stream.
   defp drain(response, items) do
-    with :ok <- GRPC.Client.MessageLimit.check_prefix(response.body),
+    with :ok <- GRPC.Client.MessageLimit.check_prefix(response.body, response.limit),
          <<flag::8, length::big-32, rest::binary>> when byte_size(rest) >= length <-
            response.body do
       <<payload::binary-size(^length), rest::binary>> = rest
@@ -287,7 +312,7 @@ defmodule GRPC.Client.Connect.Response do
              )}
 
           compressor ->
-            {:ok, compressor.decompress(body)}
+            GRPC.Client.Decompress.run(compressor, body)
         end
     end
   end

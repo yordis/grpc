@@ -20,7 +20,7 @@ defmodule GRPC.Integration.ConnectClientGetTest do
   end
 
   defmodule ReadServer do
-    use GRPC.Server, service: ReadService, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server, service: ReadService, connect: true, compressors: [GRPC.Compressor.Gzip]
 
     def read(req, stream) do
       GRPC.Server.set_headers(stream, %{"x-method" => to_string(stream.http_method)})

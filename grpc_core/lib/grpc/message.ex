@@ -117,7 +117,7 @@ defmodule GRPC.Message do
       {:ok, <<1, 2, 3, 4, 5, 6, 7, 8>>, <<>>}
   """
   def from_data(%{compressor: _} = stream, data) do
-    case check_length(data) do
+    case check_length(data, Map.get(stream, :max_message_length)) do
       :ok -> decode_data(stream, data)
       {:error, _} = error -> error
     end
@@ -183,8 +183,9 @@ defmodule GRPC.Message do
   end
 
   # The length prefix is checked before the message is sliced out of the buffer.
-  defp check_length(<<_flag::8, length::big-32, _::binary>>) do
-    max_length = max_message_length()
+
+  defp check_length(<<_flag::8, length::big-32, _::binary>>, max_length) do
+    max_length = max_length || max_message_length()
 
     if length > max_length do
       {:error,
@@ -198,10 +199,10 @@ defmodule GRPC.Message do
     end
   end
 
-  defp check_length(_data), do: :ok
+  defp check_length(_data, _max_length), do: :ok
 
-  defp check_length!(data) do
-    case check_length(data) do
+  defp check_length!(data, max_length \\ nil) do
+    case check_length(data, max_length) do
       :ok -> :ok
       {:error, error} -> raise error
     end
@@ -275,8 +276,8 @@ defmodule GRPC.Message do
     false
   end
 
-  def get_message(data, compressor) do
-    check_length!(data)
+  def get_message(data, compressor, opts \\ []) do
+    check_length!(data, opts[:max_message_length])
     take_message(data, compressor)
   end
 

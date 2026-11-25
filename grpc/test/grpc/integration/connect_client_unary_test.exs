@@ -5,7 +5,10 @@ defmodule GRPC.Integration.ConnectClientUnaryTest do
   alias GRPC.Client.Adapters.Mint
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server,
+      service: Helloworld.Greeter.Service,
+      connect: true,
+      compressors: [GRPC.Compressor.Gzip]
 
     def say_hello(%{name: "fail"}, _stream) do
       raise GRPC.RPCError, status: :not_found, message: "no such greeting"

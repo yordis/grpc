@@ -1,10 +1,15 @@
 defmodule GRPC.Server.Connect.NegotiationTest do
   use GRPC.Integration.TestCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias GRPC.Test.ConnectClient
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server,
+      service: Helloworld.Greeter.Service,
+      connect: true,
+      compressors: [GRPC.Compressor.Gzip]
 
     def say_hello(%{name: "slow"}, _stream) do
       Process.sleep(1_000)
@@ -131,6 +136,57 @@ defmodule GRPC.Server.Connect.NegotiationTest do
           assert response.status == 501
           assert %{"code" => "unimplemented"} = Jason.decode!(response.body)
         end)
+      end
+    end
+
+    describe "content-type warning over #{version}" do
+      for content_type <- [
+            "application/proto",
+            "application/json",
+            "application/connect+proto",
+            "application/connect+json"
+          ] do
+        test "#{content_type} does not log an invalid content-type warning" do
+          log =
+            capture_log(fn ->
+              run_server(HelloServer, fn port ->
+                call(port, unquote(version), [{"content-type", unquote(content_type)}], "")
+              end)
+            end)
+
+          refute log =~ "invalid content-type"
+        end
+      end
+
+      test "a Connect GET does not log an invalid content-type warning" do
+        log =
+          capture_log(fn ->
+            run_server(HelloServer, fn port ->
+              ConnectClient.request(
+                port,
+                unquote(version),
+                "GET",
+                "/helloworld.Greeter/SayHello?connect=v1&encoding=json&message=%7B%7D",
+                [{"connect-protocol-version", "1"}]
+              )
+            end)
+          end)
+
+        refute log =~ "invalid content-type"
+      end
+
+      test "an unknown content type still logs the warning and gets a 415" do
+        log =
+          capture_log(fn ->
+            run_server(HelloServer, fn port ->
+              response =
+                call(port, unquote(version), [{"content-type", "application/x-unexpected"}], "{}")
+
+              assert response.status == 415
+            end)
+          end)
+
+        assert log =~ "invalid content-type"
       end
     end
   end

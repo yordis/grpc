@@ -25,7 +25,6 @@ defmodule Conformance.Client.Call do
   }
 
   @service "connectrpc.conformance.v1.ConformanceService"
-  @canceled 1
   @unknown 2
 
   # method => {stub function, request module, kind}
@@ -44,9 +43,7 @@ defmodule Conformance.Client.Call do
            {:ok, {fun, req_mod, kind}} <- fetch_method(req),
            {:ok, messages} <- unpack(req, req_mod),
            {:ok, kind} <- check_shape(kind, req, messages) do
-        Conformance.Client.Gate.run(req.message_receive_limit, fn ->
-          with_channel(req, adapter, fn channel -> invoke(kind, fun, channel, messages, req) end)
-        end)
+        with_channel(req, adapter, fn channel -> invoke(kind, fun, channel, messages, req) end)
       end
 
     case result do
@@ -91,7 +88,8 @@ defmodule Conformance.Client.Call do
   defp unpack(%{request_messages: anys}, req_mod) do
     expected = req_mod.full_name()
 
-    Enum.reduce_while(anys, {:ok, []}, fn %Google.Protobuf.Any{type_url: url, value: value}, {:ok, acc} ->
+    Enum.reduce_while(anys, {:ok, []}, fn %Google.Protobuf.Any{type_url: url, value: value},
+                                          {:ok, acc} ->
       type = url |> String.split("/") |> List.last()
 
       if type == expected do
@@ -125,27 +123,32 @@ defmodule Conformance.Client.Call do
     |> put_cred(req)
   end
 
-  # The gRPC protocol is the default of the library. Connect is chosen per channel,
-  # together with the HTTP versions the case allows.
+  # The gRPC protocol is the default of the library. Connect and gRPC-Web are chosen per
+  # channel, together with the HTTP versions the case allows.
   defp put_protocol(opts, %{protocol: :PROTOCOL_CONNECT} = req) do
-    protocols =
-      case req.http_version do
-        :HTTP_VERSION_1 -> [:http1]
-        :HTTP_VERSION_2 -> [:http2]
-        _ -> [:http1, :http2]
-      end
-
     opts
     |> Keyword.put(:protocol, :connect)
-    |> Keyword.put(:adapter_opts, protocols: protocols)
+    |> Keyword.put(:adapter_opts, protocols: http_protocols(req.http_version))
+  end
+
+  defp put_protocol(opts, %{protocol: :PROTOCOL_GRPC_WEB} = req) do
+    opts
+    |> Keyword.put(:protocol, :grpc_web)
+    |> Keyword.put(:adapter_opts, protocols: http_protocols(req.http_version))
   end
 
   defp put_protocol(opts, _req), do: opts
 
+  defp http_protocols(:HTTP_VERSION_1), do: [:http1]
+  defp http_protocols(:HTTP_VERSION_2), do: [:http2]
+  defp http_protocols(_), do: [:http1, :http2]
+
   defp codec(:CODEC_JSON), do: GRPC.Codec.JSON
   defp codec(_), do: GRPC.Codec.Proto
 
-  defp put_compressor(opts, :COMPRESSION_GZIP), do: Keyword.put(opts, :compressor, GRPC.Compressor.Gzip)
+  defp put_compressor(opts, :COMPRESSION_GZIP),
+    do: Keyword.put(opts, :compressor, GRPC.Compressor.Gzip)
+
   defp put_compressor(opts, _), do: opts
 
   defp put_cred(opts, %{server_tls_cert: <<>>}), do: opts
@@ -170,7 +173,14 @@ defmodule Conformance.Client.Call do
     # Without a timeout in the request, send no deadline (the library defaults unary calls to 10s).
     [metadata: metadata(req.request_headers), timeout: req.timeout_ms || :infinity]
     |> put_http_method(req)
+    |> put_receive_limit(req)
   end
+
+  # A limit of zero means the request has none.
+  defp put_receive_limit(opts, %{message_receive_limit: limit}) when limit > 0,
+    do: [{:max_receive_message_length, limit} | opts]
+
+  defp put_receive_limit(opts, _req), do: opts
 
   defp put_http_method(opts, %{use_get_http_method: true}), do: [{:http_method, :get} | opts]
   defp put_http_method(opts, _req), do: opts
@@ -184,9 +194,9 @@ defmodule Conformance.Client.Call do
   # Unary
 
   defp invoke(:unary, fun, channel, [message], req) do
-    opts = [return_headers: true] ++ call_opts(req)
+    with_cancel_handle(req, fn handle ->
+      opts = [return_headers: true] ++ call_opts(req) ++ cancel_opt(handle)
 
-    run_cancellable(req, fn ->
       case apply(Stub, fun, [channel, message, opts]) do
         {:ok, reply, %{headers: headers, trailers: trailers}} ->
           %ClientResponseResult{
@@ -204,15 +214,16 @@ defmodule Conformance.Client.Call do
   # Server stream
 
   defp invoke(:server_stream, fun, channel, [message], req) do
-    opts = [return_headers: true] ++ call_opts(req)
+    with_cancel_handle(req, fn handle ->
+      opts = [return_headers: true] ++ call_opts(req) ++ cancel_opt(handle)
+      cancel = fn -> GRPC.Stub.cancel(handle) end
 
-    run_cancellable(req, fn ->
       case apply(Stub, fun, [channel, message, opts]) do
         {:ok, replies, %{headers: headers}} ->
-          consume(replies, new_result(headers), req, 0)
+          consume(replies, new_result(headers), req, 0, cancel)
 
         {:ok, replies} ->
-          consume(replies, new_result(%{}), req, 0)
+          consume(replies, new_result(%{}), req, 0, cancel)
 
         {:error, error} ->
           put_error(%ClientResponseResult{}, error)
@@ -322,7 +333,11 @@ defmodule Conformance.Client.Call do
           {:cont, {:ok, stream}}
 
         {:error, error} ->
-          result = %{put_error(%ClientResponseResult{}, error) | num_unsent_requests: total - index}
+          result = %{
+            put_error(%ClientResponseResult{}, error)
+            | num_unsent_requests: total - index
+          }
+
           {:halt, {:error, result}}
       end
     end)
@@ -364,9 +379,14 @@ defmodule Conformance.Client.Call do
 
   defp receive_stream(stream, req) do
     case GRPC.Stub.recv(stream, [return_headers: true] ++ recv_opts(req)) do
-      {:ok, replies, %{headers: headers}} -> consume(replies, new_result(headers), req, 0)
-      {:ok, replies} -> consume(replies, new_result(%{}), req, 0)
-      {:error, error} -> put_error(%ClientResponseResult{}, error)
+      {:ok, replies, %{headers: headers}} ->
+        consume(replies, new_result(headers), req, 0, fn -> GRPC.Stub.cancel(stream) end)
+
+      {:ok, replies} ->
+        consume(replies, new_result(%{}), req, 0, fn -> GRPC.Stub.cancel(stream) end)
+
+      {:error, error} ->
+        put_error(%ClientResponseResult{}, error)
     end
   end
 
@@ -375,13 +395,10 @@ defmodule Conformance.Client.Call do
 
   defp new_result(headers), do: %ClientResponseResult{response_headers: headers(headers)}
 
-  # Consumes a reply enumerable to the end, honoring a cancel after N responses.
-  defp consume(replies, result, req, seen) do
-    after_n =
-      case req.cancel do
-        %{cancel_timing: {:after_num_responses, n}} -> n
-        _ -> nil
-      end
+  # Consumes a reply enumerable to the end. After N responses, when the request says so,
+  # it cancels the call and goes on reading: the end is whatever the library returns.
+  defp consume(replies, result, req, seen, cancel) do
+    after_n = after_num_responses(req)
 
     outcome =
       Enum.reduce_while(replies, {result, seen}, fn item, {result, seen} ->
@@ -389,12 +406,8 @@ defmodule Conformance.Client.Call do
           {:ok, reply} ->
             result = %{result | payloads: result.payloads ++ [payload(reply)]}
             seen = seen + 1
-
-            if after_n == seen do
-              {:halt, {%{result | error: canceled()}, seen}}
-            else
-              {:cont, {result, seen}}
-            end
+            if after_n == seen, do: cancel.()
+            {:cont, {result, seen}}
 
           {:trailers, trailers} ->
             {:cont, {%{result | response_trailers: headers(trailers)}, seen}}
@@ -422,8 +435,8 @@ defmodule Conformance.Client.Call do
     end
   end
 
-  defp take_one(_stream, replies, req, result) do
-    {replies, apply_items(Enum.take(replies, 1), result, req)}
+  defp take_one(stream, replies, req, result) do
+    {replies, apply_items(stream, Enum.take(replies, 1), result, req)}
   end
 
   defp drain_replies(stream, nil, result, req) do
@@ -433,30 +446,27 @@ defmodule Conformance.Client.Call do
     end
   end
 
-  defp drain_replies(_stream, replies, result, req) do
-    consume_rest(replies, result, req)
+  defp drain_replies(stream, replies, result, req) do
+    consume_rest(stream, replies, result, req)
   end
 
-  defp consume_rest(replies, result, req) do
+  defp consume_rest(stream, replies, result, req) do
     seen = length(result.payloads)
 
     case result.error do
-      nil -> consume(replies, result, req, seen)
+      nil -> consume(replies, result, req, seen, fn -> GRPC.Stub.cancel(stream) end)
       _ -> result
     end
   end
 
-  defp apply_items(items, result, req) do
-    after_n =
-      case req.cancel do
-        %{cancel_timing: {:after_num_responses, n}} -> n
-        _ -> nil
-      end
+  defp apply_items(stream, items, result, req) do
+    after_n = after_num_responses(req)
 
     Enum.reduce(items, result, fn
       {:ok, reply}, result ->
         result = %{result | payloads: result.payloads ++ [payload(reply)]}
-        if after_n == length(result.payloads), do: %{result | error: canceled()}, else: result
+        if after_n == length(result.payloads), do: GRPC.Stub.cancel(stream)
+        result
 
       {:trailers, trailers}, result ->
         %{result | response_trailers: headers(trailers)}
@@ -466,29 +476,37 @@ defmodule Conformance.Client.Call do
     end)
   end
 
-  # Cancellation of a blocking call: the library has no handle to cancel a unary
-  # or server-streaming call, so the call runs in its own process and is stopped
-  # when the cancel timer fires.
-  defp run_cancellable(%{cancel: %{cancel_timing: {:after_close_send_ms, ms}}}, fun) do
-    task = Task.async(fn -> guarded(fun) end)
+  defp after_num_responses(%{cancel: %{cancel_timing: {:after_num_responses, n}}}), do: n
+  defp after_num_responses(_req), do: nil
 
-    case Task.yield(task, ms) do
-      {:ok, result} ->
-        result
+  # A unary or server-streaming call is cancelled through a handle: after the time the
+  # request names, or after N responses (see `consume/5`).
+  defp with_cancel_handle(%{cancel: nil}, fun), do: fun.(nil)
 
-      nil ->
-        Task.shutdown(task, :brutal_kill)
-        %ClientResponseResult{error: canceled()}
+  defp with_cancel_handle(%{cancel: %{cancel_timing: timing}}, fun) do
+    handle = GRPC.Stub.new_cancel_handle()
+
+    timer =
+      case timing do
+        {:after_close_send_ms, ms} ->
+          spawn(fn ->
+            Process.sleep(ms)
+            GRPC.Stub.cancel(handle)
+          end)
+
+        _ ->
+          nil
+      end
+
+    try do
+      fun.(handle)
+    after
+      if timer, do: Process.exit(timer, :kill)
     end
   end
 
-  defp run_cancellable(_req, fun), do: fun.()
-
-  defp guarded(fun) do
-    fun.()
-  rescue
-    error -> put_error(%ClientResponseResult{}, error)
-  end
+  defp cancel_opt(nil), do: []
+  defp cancel_opt(handle), do: [cancel: handle]
 
   # Conversions
 
@@ -504,8 +522,6 @@ defmodule Conformance.Client.Call do
     |> Enum.map(fn {name, value} -> %Header{name: to_string(name), value: [to_string(value)]} end)
   end
 
-  defp canceled, do: %Error{code: @canceled, message: "canceled"}
-
   # An error carries the response headers and trailers the server sent with it.
   defp put_error(result, error) do
     result = %{result | error: to_error(error)}
@@ -514,7 +530,11 @@ defmodule Conformance.Client.Call do
       %GRPC.RPCError{headers: headers, trailers: trailers} ->
         %{
           result
-          | response_headers: if(result.response_headers == [], do: headers(headers), else: result.response_headers),
+          | response_headers:
+              if(result.response_headers == [],
+                do: headers(headers),
+                else: result.response_headers
+              ),
             response_trailers: headers(trailers)
         }
 
@@ -527,9 +547,13 @@ defmodule Conformance.Client.Call do
     %Error{code: status, message: message, details: any_details(details)}
   end
 
-  defp to_error(%{__exception__: true} = error), do: %Error{code: @unknown, message: Exception.message(error)}
+  defp to_error(%{__exception__: true} = error),
+    do: %Error{code: @unknown, message: Exception.message(error)}
+
   defp to_error(other), do: %Error{code: @unknown, message: inspect(other)}
 
-  defp any_details(details) when is_list(details), do: Enum.filter(details, &match?(%Google.Protobuf.Any{}, &1))
+  defp any_details(details) when is_list(details),
+    do: Enum.filter(details, &match?(%Google.Protobuf.Any{}, &1))
+
   defp any_details(_), do: []
 end

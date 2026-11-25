@@ -14,7 +14,6 @@ defmodule Conformance.Client.Main do
   def run(adapter) do
     # Treat stdin/stdout as raw bytes: the default device re-encodes as UTF-8.
     :ok = :io.setopts(:standard_io, [:binary, encoding: :latin1])
-    {:ok, _} = Conformance.Client.Gate.start_link()
     {:ok, out} = Agent.start_link(fn -> nil end)
 
     loop(adapter, out, 0)
@@ -27,7 +26,11 @@ defmodule Conformance.Client.Main do
         wait_for(0, in_flight)
 
       request ->
-        in_flight = if in_flight >= @max_in_flight, do: wait_for(@max_in_flight - 1, in_flight), else: in_flight
+        in_flight =
+          if in_flight >= @max_in_flight,
+            do: wait_for(@max_in_flight - 1, in_flight),
+            else: in_flight
+
         parent = self()
 
         spawn(fn ->
@@ -57,7 +60,9 @@ defmodule Conformance.Client.Main do
       _ ->
         %ClientCompatResponse{
           test_name: name,
-          result: {:error, %ClientErrorResult{message: "call did not finish within #{@call_deadline_ms} ms"}}
+          result:
+            {:error,
+             %ClientErrorResult{message: "call did not finish within #{@call_deadline_ms} ms"}}
         }
     end
   end
@@ -68,7 +73,8 @@ defmodule Conformance.Client.Main do
     error ->
       %ClientCompatResponse{
         test_name: name,
-        result: {:error, %ClientErrorResult{message: Exception.format(:error, error, __STACKTRACE__)}}
+        result:
+          {:error, %ClientErrorResult{message: Exception.format(:error, error, __STACKTRACE__)}}
       }
   catch
     kind, reason ->
@@ -79,6 +85,11 @@ defmodule Conformance.Client.Main do
   end
 
   defp read_request do
+    # A run of the gate once found the device decoding UTF-8 at its first read, which fails a
+    # read of bytes with `no_translation`. Setting the encoding right before each read leaves
+    # no window for that.
+    :ok = :io.setopts(:standard_io, [:binary, encoding: :latin1])
+
     case IO.binread(:stdio, 4) do
       :eof ->
         :eof

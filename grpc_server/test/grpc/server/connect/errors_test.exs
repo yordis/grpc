@@ -4,7 +4,7 @@ defmodule GRPC.Server.Connect.ErrorsTest do
   alias GRPC.Test.ConnectClient
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     def say_hello(%{name: "error:" <> code}, stream) do
       GRPC.Server.set_headers(stream, %{"x-custom-header" => "from-server"})

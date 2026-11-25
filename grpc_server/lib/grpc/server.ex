@@ -95,6 +95,24 @@ defmodule GRPC.Server do
         string message = 1;
       }
 
+  ## Connect protocol
+
+  The [Connect protocol](https://connectrpc.com/docs/protocol) is served only by a server
+  that sets `connect: true`:
+
+      use GRPC.Server, service: Greeter.Service, connect: true
+
+  The server then answers, on the gRPC path of each method (`/helloworld.Greeter/SayHello`),
+  `POST` with `application/proto` and `application/json` (unary), `application/connect+proto`
+  and `application/connect+json` (streaming), and `GET` with `?encoding=` for a method marked
+  `NO_SIDE_EFFECTS`. Errors come back as a Connect JSON body. Without the option these
+  requests keep the behavior they had before Connect: a `POST` with `application/json` is a
+  transcoded call, and its errors carry `grpc-status` trailers. The content type must fit
+  the method: a unary content type on a streaming method, or a streaming content type on a
+  unary method, is refused with HTTP 415.
+
+  The option is independent of `http_transcode: true`, and the two can be combined.
+
   In addition to the `POST localhost/helloworld.Greeter/SayHello` route in the previous examples
   this creates an additional route: `GET localhost/v1/greeter/:name`
 
@@ -123,7 +141,8 @@ defmodule GRPC.Server do
           :service,
           codecs: [GRPC.Codec.Proto, GRPC.Codec.WebText, GRPC.Codec.JSON],
           compressors: [],
-          http_transcode: false
+          http_transcode: false,
+          connect: false
         ])
 
       service_mod = opts[:service]
@@ -241,6 +260,7 @@ defmodule GRPC.Server do
       def __meta__(:service), do: unquote(service_mod)
       def __meta__(:codecs), do: unquote(codecs)
       def __meta__(:compressors), do: unquote(compressors)
+      def __meta__(:connect), do: unquote(opts[:connect])
       def __meta__(:routes), do: unquote(routes)
     end
   end
@@ -511,11 +531,12 @@ defmodule GRPC.Server do
     Application.get_env(:grpc, :max_message_length, Bitwise.bsl(1, 31))
   end
 
-  # The limit of a message the server sends: `:max_send_message_length`, or the limit of
-  # what it receives when that is not set.
+  # The limit of a message the server sends: `:max_send_message_length`, 2 GiB by default.
+  # It is independent of the limit of what the server receives, so a reply such as an echo
+  # with fields added is not refused because the request was near the receive limit.
   @doc false
   def max_send_message_length do
-    Application.get_env(:grpc, :max_send_message_length, max_message_length())
+    Application.get_env(:grpc, :max_send_message_length, Bitwise.bsl(1, 31))
   end
 
   defp check_message_length!(message) do
@@ -614,12 +635,12 @@ defmodule GRPC.Server do
   @doc false
   def start_endpoint(endpoint, port, opts \\ []) do
     opts =
-      Keyword.validate!(opts,
+      Keyword.validate!(opts, [
+        :max_body_size,
         adapter: GRPC.Server.Adapters.Cowboy,
         adapter_opts: [],
-        exception_log_filter: nil,
-        max_body_size: nil
-      )
+        exception_log_filter: nil
+      ])
 
     adapter = opts[:adapter]
     servers = endpoint.__meta__(:servers)

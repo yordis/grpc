@@ -19,13 +19,16 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # telemetry events in case of failures
 
   @accepted_types [:data, :trailers, :headers, :error, :status]
-  @connect_events [:status, :headers, :trailers, :data]
+  @raw_events [:status, :headers, :trailers, :data]
   @header_types [:headers, :trailers]
 
   use GenServer
 
+  # The process that starts it owns it. It ends when the owner does, whatever the reason: a
+  # link does not carry a normal exit, and nobody is left to read what it buffers. The
+  # connection process sees it end and resets the request.
   def start_link(stream, send_headers_or_trailers?) do
-    GenServer.start_link(__MODULE__, {stream, send_headers_or_trailers?})
+    GenServer.start_link(__MODULE__, {stream, send_headers_or_trailers?, self()})
   end
 
   @doc """
@@ -120,8 +123,11 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # Callbacks
 
   @impl true
-  def init({stream, send_headers_or_trailers?}) do
+  def init({stream, send_headers_or_trailers?, owner}) do
+    owner_monitor = Process.monitor(owner)
+
     state = %{
+      owner_monitor: owner_monitor,
       grpc_stream: stream,
       send_headers_or_trailers: send_headers_or_trailers?,
       buffer: <<>>,
@@ -137,17 +143,20 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       data_seen: false,
       # The response ended with a `grpc-status`, or with an error, so it is complete.
       terminated: false,
-      # The state of a Connect response, which has no `grpc-status`.
-      connect: connect_response(stream)
+      # The state of a Connect or gRPC-Web response, which a protocol module reads.
+      connect: raw_response(stream)
     }
 
     {:ok, state}
   end
 
-  defp connect_response(%{channel: %{protocol: :connect}} = stream),
+  defp raw_response(%{channel: %{protocol: :connect}} = stream),
     do: GRPC.Client.Connect.Response.new(stream)
 
-  defp connect_response(_stream), do: nil
+  defp raw_response(%{channel: %{protocol: :grpc_web}} = stream),
+    do: GRPC.Client.GrpcWeb.Response.new(stream)
+
+  defp raw_response(_stream), do: nil
 
   @impl true
   def handle_call(:get_response, from, state) do
@@ -156,7 +165,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
 
   def handle_call({:consume_response, event}, _from, %{connect: connect} = state)
       when connect != nil and
-             (event == :done or (is_tuple(event) and elem(event, 0) in @connect_events)) do
+             (event == :done or (is_tuple(event) and elem(event, 0) in @raw_events)) do
     cond do
       state.failed ->
         {:reply, :cancel, state, {:continue, :produce_response}}
@@ -190,7 +199,9 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
     # the same HTTP/2 data frame.
     combined = buffer <> data
 
-    case drain_buffer(combined, state.compressor, codec, res_mod, responses) do
+    limit = state.grpc_stream.max_receive_message_length
+
+    case drain_buffer(combined, state.compressor, codec, res_mod, responses, limit) do
       {new_buffer, new_responses} ->
         new_state =
           %{state | buffer: new_buffer, responses: new_responses} |> Map.put(:data_seen, true)
@@ -283,6 +294,16 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   end
 
   @impl true
+  def handle_info(
+        {:DOWN, owner_monitor, :process, _owner, _reason},
+        %{owner_monitor: owner_monitor} = state
+      ) do
+    {:stop, :normal, state}
+  end
+
+  def handle_info(_message, state), do: {:noreply, state}
+
+  @impl true
   def handle_continue(:produce_response, state) do
     no_responses? = :queue.is_empty(state.responses)
     without_from? = is_nil(state.from)
@@ -306,7 +327,7 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   end
 
   defp consume_connect(event, %{connect: connect} = state) do
-    {connect, items, action} = GRPC.Client.Connect.Response.consume(connect, event)
+    {connect, items, action} = connect.__struct__.consume(connect, event)
     state = %{state | connect: connect}
     state = Enum.reduce(items, state, &queue_connect_item/2)
 
@@ -384,8 +405,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   # remaining bytes, at which point the leftover buffer and the populated queue
   # are returned as `{remaining_buffer, updated_queue}`. A message over the size
   # limit ends the pass with `{:error, error, updated_queue}`.
-  defp drain_buffer(buffer, compressor, codec, res_mod, responses_queue) do
-    case get_message(buffer, compressor) do
+  defp drain_buffer(buffer, compressor, codec, res_mod, responses_queue, limit) do
+    case GRPC.Client.Decompress.get_message(buffer, compressor, limit) do
       {:error, error} ->
         {:error, error, responses_queue}
 
@@ -398,7 +419,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
               compressor,
               codec,
               res_mod,
-              :queue.in({:ok, response}, responses_queue)
+              :queue.in({:ok, response}, responses_queue),
+              limit
             )
 
           {:error, error} ->
@@ -408,26 +430,6 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
       _ ->
         {buffer, responses_queue}
     end
-  end
-
-  # The prefix is checked here, as newer `GRPC.Message.get_message/2` does, and
-  # that function raises for a message over `:max_message_length` or a gzip bomb.
-  defp get_message(buffer, compressor) do
-    with :ok <- GRPC.Client.MessageLimit.check_prefix(buffer) do
-      case GRPC.Message.get_message(buffer, compressor) do
-        {{1, _message}, _rest} when is_nil(compressor) ->
-          {:error,
-           GRPC.RPCError.exception(
-             status: :internal,
-             message: "Compressed flag is set, but not specified in headers."
-           )}
-
-        other ->
-          other
-      end
-    end
-  rescue
-    error in GRPC.RPCError -> {:error, error}
   end
 
   defp get_headers_response(headers, type, response_headers) do

@@ -74,7 +74,7 @@ if Code.ensure_loaded?(:gun) do
     # Calls carrying headers or bodies go through `Adapter.call/3`, so an exit (busy or dead
     # connection process) does not leak them into logs and telemetry.
     def request(connection_process_pid, path, headers, body, deadline \\ :infinity) do
-      Adapter.call(connection_process_pid, {:request, path, headers, body, deadline})
+      request(connection_process_pid, "POST", path, headers, body, deadline)
     end
 
     # A request without a body, such as a Connect GET, has `nil` as the body.
@@ -165,10 +165,6 @@ if Code.ensure_loaded?(:gun) do
       {:stop, :normal, :ok, %{state | waiters: []}}
     end
 
-    def handle_call({:request, path, headers, body, deadline}, from, state) do
-      handle_call({:request, "POST", path, headers, body, deadline}, from, state)
-    end
-
     def handle_call(
           {:request, method, path, headers, body, deadline},
           {caller_pid, _},
@@ -218,7 +214,9 @@ if Code.ensure_loaded?(:gun) do
       state = %{state | await_timer: nil}
 
       case protocol do
-        proto when proto == :http2 or (proto == :http and state.channel.protocol == :connect) ->
+        proto
+        when proto == :http2 or
+               (proto == :http and state.channel.protocol in [:connect, :grpc_web]) ->
           Telemetry.execute(
             :connected,
             %{generation: 1},
@@ -257,7 +255,8 @@ if Code.ensure_loaded?(:gun) do
     def handle_info(:await_up_timeout, state), do: {:noreply, state}
 
     def handle_info({:gun_up, _gun_pid, proto}, state)
-        when proto == :http2 or (proto == :http and state.channel.protocol == :connect) do
+        when proto == :http2 or
+               (proto == :http and state.channel.protocol in [:connect, :grpc_web]) do
       generation = state.generation + 1
 
       Telemetry.execute(

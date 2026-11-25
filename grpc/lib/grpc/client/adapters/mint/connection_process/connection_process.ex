@@ -235,6 +235,13 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
+    # A request that was cancelled, or has ended, takes no more body. Queuing it would make
+    # the queue processor ask Mint for the window of a request it does not know.
+    def handle_call({:stream_body, request_ref, _body}, _from, state)
+        when not State.has_request_ref(state, request_ref) do
+      {:reply, :ok, state}
+    end
+
     def handle_call({:stream_body, request_ref, body}, from, state) do
       queue = :queue.in({request_ref, body, from}, state.request_stream_queue)
 
@@ -399,12 +406,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
       %{state | pings_unacked: state.pings_unacked - pongs}
     end
 
-    # A Connect response is handed to its response process as it comes: it decides what the
+    # A Connect or gRPC-Web response is handed to its response process as it comes: it decides what the
     # status and the headers mean.
     defp route_response(response, state) do
       ref = elem(response, 1)
 
-      if State.has_request_ref(state, ref) and State.connect?(state, ref) do
+      if State.has_request_ref(state, ref) and State.raw_response?(state, ref) do
         process_connect_response(response, state)
       else
         process_response(response, state)
@@ -517,7 +524,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     defp cancel_dead_stream(state, request_ref, pid, reason) do
-      Logger.warning(
+      # A response process ends with its caller, which is how a caller that is done with a
+      # stream releases it.
+      level = if reason in [:normal, :shutdown], do: :debug, else: :warning
+
+      Logger.log(
+        level,
         "stream response process #{inspect(pid)} is not alive (#{inspect(reason)}), cancelling request #{inspect(request_ref)}"
       )
 

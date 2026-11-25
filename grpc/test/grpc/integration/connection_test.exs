@@ -41,9 +41,10 @@ defmodule GRPC.Integration.ConnectionTest do
   test "authentication works" do
     server = FeatureServer
 
-    cred = GRPC.Factory.build(:credential, verify: :verify_peer)
+    cred = GRPC.TestCerts.client_credential()
 
-    {:ok, _, port} = GRPC.Server.start(server, 0, adapter_opts: [cred: cred])
+    {:ok, _, port} =
+      GRPC.Server.start(server, 0, adapter_opts: [cred: GRPC.TestCerts.server_credential()])
 
     try do
       point = %Routeguide.Point{latitude: 409_146_138, longitude: -746_188_906}

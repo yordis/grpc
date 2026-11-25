@@ -10,10 +10,10 @@ defmodule GRPC.Client.Adapters.GunTest do
   end
 
   setup do
-    server_credential = build(:credential)
-
     {:ok, _, port} =
-      GRPC.Server.start_endpoint(Endpoint, 0, adapter_opts: [cred: server_credential])
+      GRPC.Server.start_endpoint(Endpoint, 0,
+        adapter_opts: [cred: GRPC.TestCerts.server_credential()]
+      )
 
     on_exit(fn ->
       :ok = GRPC.Server.stop_endpoint(Endpoint)
@@ -21,7 +21,7 @@ defmodule GRPC.Client.Adapters.GunTest do
 
     %{
       port: port,
-      credential: server_credential
+      credential: GRPC.TestCerts.client_credential()
     }
   end
 
@@ -77,8 +77,10 @@ defmodule GRPC.Client.Adapters.GunTest do
       assert {:ok, result} =
                Gun.connect(channel,
                  transport_opts: [
-                   verify: :verify_none,
-                   certfile: credential.ssl[:certfile],
+                   verify: :verify_peer,
+                   cacertfile: credential.ssl[:cacertfile],
+                   certfile: GRPC.TestCerts.files().client_cert,
+                   keyfile: GRPC.TestCerts.files().client_key,
                    ip: :loopback
                  ]
                )
@@ -92,7 +94,8 @@ defmodule GRPC.Client.Adapters.GunTest do
                Gun.connect(channel,
                  await_timeout: 100,
                  transport_opts: [
-                   certfile: credential.ssl[:certfile] <> "invalidsuffix",
+                   # Not the CA that signed the server certificate
+                   cacertfile: GRPC.TestCerts.files().client_ca,
                    verify: :verify_peer,
                    ip: :loopback
                  ]

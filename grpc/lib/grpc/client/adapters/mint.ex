@@ -49,7 +49,6 @@ if Code.ensure_loaded?(Mint.HTTP) do
     ]
     @default_transport_opts [timeout: 20_000, nodelay: true]
     @cleanup_timeout 1_000
-    @deadline_tolerance 1
     @unavailable GRPC.Status.unavailable()
 
     @doc """
@@ -274,12 +273,14 @@ if Code.ensure_loaded?(Mint.HTTP) do
       ]
     end
 
-    # The gRPC protocol runs on HTTP/2 only. Connect runs on either version.
-    defp put_protocols(opts, %Channel{protocol: :connect}, protocols) when is_list(protocols),
-      do: Keyword.put(opts, :protocols, protocols)
+    # The gRPC protocol runs on HTTP/2 only. Connect and gRPC-Web run on either version.
+    defp put_protocols(opts, %Channel{protocol: protocol}, protocols)
+         when protocol in [:connect, :grpc_web] and is_list(protocols),
+         do: Keyword.put(opts, :protocols, protocols)
 
-    defp put_protocols(opts, %Channel{protocol: :connect}, _protocols),
-      do: Keyword.put(opts, :protocols, [:http1, :http2])
+    defp put_protocols(opts, %Channel{protocol: protocol}, _protocols)
+         when protocol in [:connect, :grpc_web],
+         do: Keyword.put(opts, :protocols, [:http1, :http2])
 
     defp put_protocols(opts, _channel, _protocols), do: opts
 
@@ -341,6 +342,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
       headers_or_error = Enum.at(stream, 0)
       # if this check fails then an error tuple will be returned
       with {:headers, headers} <- headers_or_error do
+        stream = reset_on_halt(stream, grpc_stream, pid, request_type)
+
         if opts[:return_headers] do
           {:ok, stream, %{headers: headers}}
         else
@@ -418,12 +421,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
-    # A server enforces the `grpc-timeout` it was sent, counted from when the request
-    # reached it, so it never expires before the client's own deadline. A CANCEL reset
-    # that arrives once the deadline has passed is that deadline, whichever side notices
-    # first. The 1ms is only the millisecond truncation of the two clocks.
-    defp reset_at_deadline?(%{payload: %{deadline: deadline}}) when is_integer(deadline),
-      do: System.monotonic_time(:millisecond) >= deadline - @deadline_tolerance
+    defp reset_at_deadline?(%{payload: %{deadline: deadline}}),
+      do: GRPC.Client.ResetCode.at_deadline?(deadline)
 
     defp reset_at_deadline?(_stream), do: false
 
@@ -510,6 +509,21 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp deadline_error(response, _stream, _pid), do: response
 
+    # A caller that stops reading a server stream before its end, as `Enum.take/2` does, has no
+    # use for the rest of it. Reset the request, and stop the process that buffers the reply.
+    # A bidirectional stream is read in parts, so there it stays open until the caller ends.
+    defp reset_on_halt(stream, grpc_stream, pid, :server_stream) do
+      Stream.transform(
+        stream,
+        fn -> :ok end,
+        fn item, acc -> {[item], acc} end,
+        fn acc -> {[], acc} end,
+        fn _acc -> if Process.alive?(pid), do: give_up_on_request(grpc_stream, pid) end
+      )
+    end
+
+    defp reset_on_halt(stream, _grpc_stream, _pid, _request_type), do: stream
+
     defp call_timeout(%{payload: %{deadline: deadline}}) when is_integer(deadline),
       do: {:deadline, deadline}
 
@@ -535,6 +549,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp rpc_error({:error, %Mint.HTTPError{reason: {:server_closed_connection, _, _}} = error}) do
       unavailable(error)
+    end
+
+    defp rpc_error({:error, %Mint.HTTPError{reason: {:server_closed_request, code}}}) do
+      GRPC.Client.ResetCode.error(code)
     end
 
     defp rpc_error({:error, :closed}) do
@@ -590,6 +608,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     defp request_headers(%{channel: %{protocol: :connect}} = stream, opts, method),
       do: Connect.request_headers(stream, opts, method)
+
+    defp request_headers(%{channel: %{protocol: :grpc_web}} = stream, opts, _method),
+      do: GRPC.Client.GrpcWeb.request_headers(stream, opts)
 
     defp request_headers(stream, opts, _method),
       do: GRPC.Transport.HTTP2.client_headers_without_reserved(stream, opts)

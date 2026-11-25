@@ -145,6 +145,7 @@ defmodule GRPC.Server.Test do
       http_request_headers: headers,
       local: Keyword.get(opts, :local),
       deadline: deadline(opts, headers),
+      timeout_ms: timeout_ms(opts, headers),
       adapter: Adapter,
       payload: payload
     }
@@ -246,22 +247,24 @@ defmodule GRPC.Server.Test do
   end
 
   defp deadline(opts, headers) do
-    timeout =
-      case Keyword.fetch(opts, :timeout) do
-        {:ok, timeout} ->
-          timeout
-
-        :error ->
-          case headers do
-            %{"grpc-timeout" => value} when is_binary(value) ->
-              GRPC.Transport.Utils.decode_timeout(value)
-
-            _ ->
-              nil
-          end
-      end
-
+    timeout = timeout_ms(opts, headers)
     timeout && System.monotonic_time(:millisecond) + timeout
+  end
+
+  defp timeout_ms(opts, headers) do
+    case Keyword.fetch(opts, :timeout) do
+      {:ok, timeout} ->
+        timeout
+
+      :error ->
+        case headers do
+          %{"grpc-timeout" => value} when is_binary(value) ->
+            GRPC.Transport.Utils.decode_timeout(value)
+
+          _ ->
+            nil
+        end
+    end
   end
 
   defp request_id do

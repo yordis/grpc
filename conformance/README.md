@@ -3,9 +3,9 @@
 This directory runs the [connectrpc/conformance](https://github.com/connectrpc/conformance)
 suite against the Elixir gRPC library, as a server (`bin/server`) and as a client (`bin/client`).
 
-The goal is that every case passes with empty known-failing lists. The lists in `config/`
-exist only for failures that are being worked on, and each group has its root cause written
-above it. There are no flaky allowances: a case either passes or is a known failure.
+Every case passes. The known-failing lists in `config/` are empty (comments only) and there
+is no flaky mechanism: a case either passes or is a known failure, and an intermittent failure
+is a bug.
 
 ## Setup
 
@@ -23,13 +23,35 @@ cd conformance && mix deps.compile grpc_core grpc_server grpc --force
 
 ## Run everything
 
+Server mode, covering gRPC, gRPC-Web and Connect (3820 cases):
+
 ```sh
-conformance/run.sh config/grpc.yaml                              # server: gRPC and gRPC-Web
-conformance/run.sh config/full.yaml                              # server: adds Connect (measures the gap)
-CLIENT_ADAPTER=mint conformance/run.sh config/client.yaml        # client, Mint adapter
-CLIENT_ADAPTER=gun  conformance/run.sh config/client.yaml        # client, Gun adapter
-CLIENT_ADAPTER=mint conformance/run.sh config/client.connect.yaml # client, Connect protocol, Mint adapter
+conformance/run.sh config/full.yaml
 ```
+
+Client mode, gRPC over HTTP/2, with the Mint and the Gun adapter (1052 cases each):
+
+```sh
+CLIENT_ADAPTER=mint conformance/run.sh config/client.yaml
+CLIENT_ADAPTER=gun  conformance/run.sh config/client.yaml
+```
+
+Client mode, Connect protocol with the Mint and the Gun adapter (1764 cases each):
+
+```sh
+CLIENT_ADAPTER=mint conformance/run.sh config/client.connect.yaml
+CLIENT_ADAPTER=gun  conformance/run.sh config/client.connect.yaml
+```
+
+Client mode, gRPC-Web protocol with the Mint and the Gun adapter (2046 cases each):
+
+```sh
+CLIENT_ADAPTER=mint conformance/run.sh config/client.grpcweb.yaml
+CLIENT_ADAPTER=gun  conformance/run.sh config/client.grpcweb.yaml
+```
+
+Narrower server configs run a slice of `full.yaml`: `config/grpc.yaml` for gRPC and gRPC-Web
+only, `config/connect.yaml` for Connect only.
 
 `run.sh` applies `config/<name>.known_failing.txt` (server) or
 `config/client.<adapter>.known_failing.txt` (client) when the file exists. The run exits 0
@@ -38,7 +60,7 @@ only when every case outside the list passes and every case in the list still fa
 To see the real state, run without a list:
 
 ```sh
-KNOWN_FAILING= conformance/run.sh config/grpc.yaml
+KNOWN_FAILING= conformance/run.sh config/full.yaml
 ```
 
 ## Run one suite or case
@@ -69,28 +91,32 @@ as a full segment, so partial wildcards such as `Protocol:*` do not match.
 
 | Config | Mode | Scope |
 | --- | --- | --- |
-| `config/grpc.yaml` | server | gRPC and gRPC-Web, proto and JSON, identity and gzip, every stream type, HTTP/1.1, HTTP/2, h2c, TLS, TLS client certificates, trailers, message receive limit |
-| `config/full.yaml` | server | the same plus Connect, which the library does not implement |
-| `config/client.connect.yaml` | client | the Connect protocol (`protocol: :connect`) with the Mint adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, GET, timeouts, cancellation, message receive limit |
+| `config/full.yaml` | server | gRPC, gRPC-Web and Connect, proto and JSON, identity and gzip, every stream type, HTTP/1.1, HTTP/2, h2c, TLS, TLS client certificates, trailers, message receive limit |
+| `config/grpc.yaml` | server | the gRPC and gRPC-Web part of `full.yaml` |
+| `config/connect.yaml` | server | the Connect part of `full.yaml` |
 | `config/client.yaml` | client | gRPC over HTTP/2 with the Mint or Gun adapter, proto and JSON, identity and gzip, every stream type, TLS and client certificates, message receive limit |
+| `config/client.connect.yaml` | client | the Connect protocol (`protocol: :connect`) with the Mint or Gun adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, GET, timeouts, cancellation, message receive limit |
+| `config/client.grpcweb.yaml` | client | the gRPC-Web protocol (`protocol: :grpc_web`) with the Mint or Gun adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, trailers, timeouts, cancellation, message receive limit |
 
-Left off on purpose: Connect GET and Connect in `grpc.yaml` (no Connect support), HTTP/1.1
-and gRPC-Web in `client.yaml` (the client speaks gRPC over HTTP/2 only), and half-duplex
+Left off on purpose: HTTP/1.1 and gRPC-Web in `client.yaml` (the client speaks gRPC over HTTP/2 only), and half-duplex
 bidirectional streaming over HTTP/1.1 for the client.
 
 ## Current results
 
-Measured with empty known-failing lists on the integration branch (`KNOWN_FAILING=`):
+Measured with the committed, empty known-failing lists:
 
 | Run | Passed | Failed | Total |
 | --- | ---: | ---: | ---: |
 | Server, `config/full.yaml` (gRPC, gRPC-Web and Connect) | 3820 | 0 | 3820 |
 | Client, `config/client.yaml`, Mint | 1052 | 0 | 1052 |
 | Client, `config/client.yaml`, Gun | 1052 | 0 | 1052 |
+| Client, `config/client.connect.yaml`, Mint | 1764 | 0 | 1764 |
+| Client, `config/client.connect.yaml`, Gun | 1764 | 0 | 1764 |
+| Client, `config/client.grpcweb.yaml`, Mint | 2046 | 0 | 2046 |
+| Client, `config/client.grpcweb.yaml`, Gun | 2046 | 0 | 2046 |
 
-Every known-failing list is empty, so the lists are only comments. When a regression or a new
-feature adds failures, add them back as grouped globs with the root cause written above each
-group, and remove them as the fixes land.
+When a regression or a new feature adds failures, add them to the matching list as grouped
+globs with the root cause written above each group, and remove them as the fixes land.
 
 ## Layout
 

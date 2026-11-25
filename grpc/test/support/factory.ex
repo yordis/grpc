@@ -2,7 +2,6 @@ defmodule GRPC.Factory do
   @moduledoc false
 
   alias GRPC.Channel
-  alias GRPC.Credential
 
   def build(resource, attrs \\ %{}) do
     name = :"#{resource}_factory"
@@ -24,7 +23,7 @@ defmodule GRPC.Factory do
       host: "localhost",
       port: 1337,
       scheme: "http",
-      cred: build(:credential),
+      cred: GRPC.TestCerts.client_credential(),
       adapter: GRPC.Client.Adapters.Gun,
       adapter_payload: %{},
       codec: GRPC.Codec.Proto,
@@ -32,22 +31,6 @@ defmodule GRPC.Factory do
       compressor: nil,
       accepted_compressors: [],
       headers: []
-    }
-  end
-
-  def credential_factory do
-    cert_path = Path.expand("./tls/server1.pem", :code.priv_dir(:grpc))
-    key_path = Path.expand("./tls/server1.key", :code.priv_dir(:grpc))
-    ca_path = Path.expand("./tls/ca.pem", :code.priv_dir(:grpc))
-
-    %Credential{
-      ssl: [
-        certfile: cert_path,
-        cacertfile: ca_path,
-        keyfile: key_path,
-        verify: :verify_none,
-        versions: [:"tlsv1.2", :"tlsv1.3"]
-      ]
     }
   end
 

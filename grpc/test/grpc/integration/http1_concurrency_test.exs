@@ -11,7 +11,7 @@ defmodule GRPC.Integration.Http1ConcurrencyTest do
   @deadline_exceeded GRPC.Status.deadline_exceeded()
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     def say_hello(%{name: "hang"}, _stream) do
       Process.sleep(10_000)
@@ -27,7 +27,7 @@ defmodule GRPC.Integration.Http1ConcurrencyTest do
   end
 
   defmodule RouteServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service
+    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true
 
     def record_route(req_enum, _stream),
       do: %Routeguide.RouteSummary{point_count: Enum.count(req_enum)}

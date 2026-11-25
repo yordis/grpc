@@ -259,10 +259,11 @@ if Code.ensure_loaded?(:gun) do
       deadline = deadline(opts[:timeout])
 
       case do_send_request(stream, message, opts, deadline) do
-        {:ok, stream_ref, response_pid} ->
+        {:ok, stream_ref, response_pid, lane} ->
           stream
           |> GRPC.Client.Stream.put_payload(:stream_ref, stream_ref)
           |> GRPC.Client.Stream.put_payload(:response_pid, response_pid)
+          |> GRPC.Client.Stream.put_payload(:lane, lane)
           |> GRPC.Client.Stream.put_payload(:deadline, deadline)
 
         {:error, reason} ->
@@ -281,8 +282,8 @@ if Code.ensure_loaded?(:gun) do
       case call_connection(conn_pid, fn ->
              ConnectionProcess.request(conn_pid, method, path, headers, data, deadline)
            end) do
-        {:ok, %{stream_ref: stream_ref, response_pid: response_pid}} ->
-          {:ok, stream_ref, response_pid}
+        {:ok, %{stream_ref: stream_ref, response_pid: response_pid} = response} ->
+          {:ok, stream_ref, response_pid, response[:conn_pid]}
 
         {:error, reason} ->
           {:error, reason}
@@ -333,10 +334,11 @@ if Code.ensure_loaded?(:gun) do
       case call_connection(conn_pid, fn ->
              ConnectionProcess.open_stream(conn_pid, path, headers, deadline)
            end) do
-        {:ok, %{stream_ref: stream_ref, response_pid: response_pid}} ->
+        {:ok, %{stream_ref: stream_ref, response_pid: response_pid} = response} ->
           stream
           |> GRPC.Client.Stream.put_payload(:stream_ref, stream_ref)
           |> GRPC.Client.Stream.put_payload(:response_pid, response_pid)
+          |> GRPC.Client.Stream.put_payload(:lane, response[:conn_pid])
           |> GRPC.Client.Stream.put_payload(:deadline, deadline)
 
         {:error, reason} ->
@@ -349,8 +351,8 @@ if Code.ensure_loaded?(:gun) do
     @impl true
     def send_data(%{payload: %{request_error: _}} = stream, _message, _opts), do: stream
 
-    def send_data(%{channel: channel, payload: %{stream_ref: stream_ref}} = stream, message, opts) do
-      conn_pid = channel.adapter_payload[:conn_pid]
+    def send_data(%{payload: %{stream_ref: stream_ref}} = stream, message, opts) do
+      conn_pid = stream_conn_pid(stream)
       fin = if opts[:send_end_stream], do: :fin, else: :nofin
       {:ok, data, _} = GRPC.Message.to_data(message, opts)
 
@@ -360,8 +362,8 @@ if Code.ensure_loaded?(:gun) do
     @impl true
     def end_stream(%{payload: %{request_error: _}} = stream), do: stream
 
-    def end_stream(%{channel: channel, payload: %{stream_ref: stream_ref}} = stream) do
-      conn_pid = channel.adapter_payload[:conn_pid]
+    def end_stream(%{payload: %{stream_ref: stream_ref}} = stream) do
+      conn_pid = stream_conn_pid(stream)
 
       stream_data(stream, conn_pid, stream_ref, :fin, "")
     end
@@ -379,13 +381,14 @@ if Code.ensure_loaded?(:gun) do
     def cancel(%{payload: %{request_error: _}}), do: :ok
 
     def cancel(stream) do
-      %{
-        channel: %{adapter_payload: %{conn_pid: conn_pid}},
-        payload: %{stream_ref: stream_ref}
-      } = stream
+      %{payload: %{stream_ref: stream_ref}} = stream
 
-      ConnectionProcess.cancel(conn_pid, stream_ref)
+      ConnectionProcess.cancel(stream_conn_pid(stream), stream_ref)
     end
+
+    # A call that found an HTTP/1.1 connection busy runs on a connection of its own.
+    defp stream_conn_pid(%{payload: %{lane: lane}}) when is_pid(lane), do: lane
+    defp stream_conn_pid(%{channel: %{adapter_payload: %{conn_pid: conn_pid}}}), do: conn_pid
 
     @impl true
     def receive_data(%{payload: %{request_error: error}}, _opts), do: {:error, error}

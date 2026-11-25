@@ -530,25 +530,31 @@ if Code.ensure_loaded?(:gun) do
       end
 
       case ReplyReader.get_and_update(reader, take) do
-        {:item, item} -> {[item], reader}
-        :halt -> {:halt, reader}
+        {:item, item} ->
+          {[item], reader}
+
+        :halt ->
+          ReplyReader.stop(reader)
+          {:halt, reader}
       end
     catch
       :exit, _reason -> {:halt, reader}
     end
 
-    defp connect_release(reader, type) do
-      if type == :server_stream do
-        ReplyReader.get_and_update(reader, fn state ->
-          unless state.done, do: cancel(state.stream)
-          {:ok, %{state | done: true}}
-        end)
-      end
+    # A bidi stream is read in parts, and its reader stays for the next part: it ends with the
+    # last item or with the caller.
+    defp connect_release(reader, :server_stream) do
+      ReplyReader.get_and_update(reader, fn state ->
+        unless state.done, do: cancel(state.stream)
+        {:ok, %{state | done: true}}
+      end)
 
       ReplyReader.stop(reader)
     catch
       :exit, _reason -> :ok
     end
+
+    defp connect_release(_reader, _type), do: :ok
 
     # The next item of a streaming call. An error is the last one.
     defp connect_next(%{items: [{:error, error} | _]} = state) do

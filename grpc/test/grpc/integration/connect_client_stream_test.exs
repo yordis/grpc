@@ -115,7 +115,9 @@ defmodule GRPC.Integration.ConnectClientStreamTest do
         run_server(FeatureServer, fn port ->
           channel = connect(port, adapter_opts: [protocols: protocols])
 
-          stream = Routeguide.RouteGuide.Stub.route_chat(channel, compressor: GRPC.Compressor.Gzip)
+          stream =
+            Routeguide.RouteGuide.Stub.route_chat(channel, compressor: GRPC.Compressor.Gzip)
+
           GRPC.Stub.send_request(stream, note(1), end_stream: true)
 
           assert {:ok, replies} = GRPC.Stub.recv(stream)

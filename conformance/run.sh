@@ -7,6 +7,9 @@
 #
 # Environment:
 #   CLIENT_ADAPTER  mint (default) or gun; selects the client adapter in client mode.
+#   CONFORMANCE_CAPTURE_DIR  when set, keeps the bytes each client or server read and wrote, and
+#                   its stderr with times, as <dir>/<time>.<pid>.{in,out,err} (see bin/capture).
+#                   Gates set it, so a failure always has evidence.
 #   KNOWN_FAILING   file of test cases expected to fail. Defaults to config/<name>.known_failing.txt
 #                   (config/client.<adapter>.known_failing.txt for the client) when it exists.
 #                   Set it to an empty string to run without a list.
@@ -37,6 +40,8 @@ case "$name" in
     ;;
 esac
 [ -f "$here/config/$list.known_failing.txt" ] && : "${KNOWN_FAILING=$here/config/$list.known_failing.txt}"
+
+[ -z "${CONFORMANCE_CAPTURE_DIR:-}" ] || program="$here/bin/capture $CONFORMANCE_CAPTURE_DIR $program"
 
 extra=""
 [ -n "${KNOWN_FAILING:-}" ] && extra="--known-failing @$KNOWN_FAILING"

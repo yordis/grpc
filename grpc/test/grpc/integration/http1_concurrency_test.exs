@@ -152,7 +152,9 @@ defmodule GRPC.Integration.Http1ConcurrencyTest do
 
           results =
             1..6
-            |> Enum.map(fn _ -> Task.async(fn -> hello(channel, "gauge", timeout: 10_000) end) end)
+            |> Enum.map(fn _ ->
+              Task.async(fn -> hello(channel, "gauge", timeout: 10_000) end)
+            end)
             |> Task.await_many(15_000)
 
           for result <- results,

@@ -24,7 +24,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
       notify_drain: false,
       draining: false,
       lane?: false,
-      lazy_reconnect: false
+      lazy_reconnect: false,
+      lanes: nil
     ]
 
     def new(conn, opts) do
@@ -41,7 +42,11 @@ if Code.ensure_loaded?(Mint.HTTP) do
         keepalive: opts[:keepalive],
         keepalive_tolerance: opts[:keepalive_tolerance],
         notify_drain: opts[:notify_drain] || false,
-        lane?: opts[:lane?] || false
+        lane?: opts[:lane?] || false,
+        lanes:
+          GRPC.Client.HTTP1Lanes.new(
+            opts[:http1_max_connections] || GRPC.Client.HTTP1Lanes.default_max_connections()
+          )
       }
     end
 

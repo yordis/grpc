@@ -271,7 +271,8 @@ defmodule GRPC.Client.Connection do
       With `http://` there is no negotiation: the client speaks HTTP/2 with prior knowledge
       (h2c), as a gRPC client does, and HTTP/1.1 only with `adapter_opts: [protocols: [:http1]]`.
       A list with both versions is HTTP/2 on `http://`. HTTP/1.1 carries one call at a time per
-      connection, and a call that streams both ways is half-duplex on it.
+      connection, so a call that finds it busy opens another connection, up to the adapter option
+      `:http1_max_connections` (default `8`), and a call that streams both ways is half-duplex on it.
     * `:compressor` / `:accepted_compressors` – message compression
     * `:headers` – default metadata headers
     * `:max_receive_message_length` – the largest reply message, in bytes, that

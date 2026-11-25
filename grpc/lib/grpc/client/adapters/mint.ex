@@ -71,6 +71,10 @@ if Code.ensure_loaded?(Mint.HTTP) do
         Defaults to `nil` (no pings).
       * `:keepalive_tolerance`: Number of unacknowledged pings after which the connection is closed,
         triggering `:retry` if configured. Defaults to `nil` (never close). Has no effect without `:keepalive`.
+      * `:http1_max_connections`: the most connections the channel opens over HTTP/1.1, default `8`.
+        HTTP/1.1 carries one call at a time on a connection, so a call that finds the channel's
+        connection busy opens another one for itself, up to this limit. Calls over it wait for a
+        connection to free, and fail with `UNAVAILABLE` after 5 seconds. HTTP/2 ignores it.
       * `:protocols`: for `protocol: :connect` and `protocol: :grpc_web`, a non-empty list of the HTTP
         versions to allow, from `:http1` and `:http2`. With `https://` the version is negotiated with
         ALPN, and the default allows both. With `http://` there is no negotiation: the adapter speaks
@@ -99,6 +103,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
       :protocols,
       :keepalive,
       :keepalive_tolerance,
+      :http1_max_connections,
       :config_options,
       :logical_connection_ref,
       :notify_drain
@@ -109,7 +114,9 @@ if Code.ensure_loaded?(Mint.HTTP) do
 
     @impl true
     def validate_opts(opts) do
-      with :ok <- validate_known_opts(opts), do: validate_retry(opts[:retry])
+      with :ok <- validate_known_opts(opts),
+           :ok <- validate_retry(opts[:retry]),
+           do: GRPC.Client.HTTP1Lanes.validate(opts)
     end
 
     @impl true
@@ -190,9 +197,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
-    def end_stream(
-          %{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream
-        ) do
+    def end_stream(%{payload: %{response: {:ok, %{request_ref: request_ref}}}} = stream) do
       pid = conn_pid(stream)
       stream_body(stream, pid, request_ref, :eof)
       stream
@@ -312,10 +317,12 @@ if Code.ensure_loaded?(Mint.HTTP) do
       }
 
       {protocols, opts} = Keyword.pop(opts, :protocols)
+      {max_http1, opts} = Keyword.pop(opts, :http1_max_connections)
 
       opts =
         channel
         |> connect_opts(opts)
+        |> then(&if max_http1, do: Keyword.put(&1, :http1_max_connections, max_http1), else: &1)
         |> Keyword.merge(module_opts)
         |> put_protocols(channel, protocols)
         |> Keyword.put(:retry, retry)

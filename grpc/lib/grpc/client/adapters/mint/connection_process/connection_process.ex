@@ -10,6 +10,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
     use GenServer
 
     alias GRPC.Client.Adapter
+    alias GRPC.Client.HTTP1Lanes
     alias GRPC.Client.Adapters.Mint.ConnectionProcess.State
     alias GRPC.Client.Adapters.Mint.StreamResponseProcess
     alias GRPC.Client.Telemetry
@@ -57,7 +58,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
       request = {:request, method, path, headers, body, opts}
 
       case Adapter.call(pid, request) do
-        {:busy, spec} -> request_on_lane(spec, request)
+        {:busy, spec} -> request_on_lane(pid, spec, request)
         reply -> reply
       end
     end
@@ -66,28 +67,31 @@ if Code.ensure_loaded?(Mint.HTTP) do
     # connection busy gets a connection of its own, for that one call. The reply
     # carries the pid that holds the request, and the body, cancel and deadline
     # calls go to it.
-    defp request_on_lane({scheme, host, port, connect_opts}, request) do
+    defp request_on_lane(pid, {scheme, host, port, connect_opts}, request) do
       lane_opts = connect_opts |> Keyword.delete(:parent) |> Keyword.put(:lane?, true)
 
-      case GenServer.start(__MODULE__, {scheme, host, port, lane_opts}) do
-        {:ok, lane} ->
-          try do
-            case Adapter.call(lane, request) do
-              {:ok, response} ->
+      with {:ok, token} <- HTTP1Lanes.acquire(pid) do
+        case GenServer.start(__MODULE__, {scheme, host, port, lane_opts}) do
+          {:ok, lane} ->
+            try do
+              with :ok <- HTTP1Lanes.attach(pid, token, lane),
+                   {:ok, response} <- Adapter.call(lane, request) do
                 {:ok, Map.put(response, :conn_pid, lane)}
-
-              error ->
+              else
+                error ->
+                  stop_lane(lane)
+                  error
+              end
+            catch
+              :exit, reason ->
                 stop_lane(lane)
-                error
+                :erlang.raise(:exit, reason, __STACKTRACE__)
             end
-          catch
-            :exit, reason ->
-              stop_lane(lane)
-              :erlang.raise(:exit, reason, __STACKTRACE__)
-          end
 
-        {:error, reason} ->
-          {:error, reason}
+          {:error, reason} ->
+            HTTP1Lanes.release(pid, token)
+            {:error, reason}
+        end
       end
     end
 
@@ -136,6 +140,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
       {metadata, opts} = Keyword.pop(opts, :grpc_transport_metadata, %{})
       metadata = Map.put(metadata, :transport_ref, self())
       {lane?, opts} = Keyword.pop(opts, :lane?, false)
+      {max_http1, opts} = Keyword.pop(opts, :http1_max_connections)
       unless lane?, do: Telemetry.execute(:started, %{generation: 0, active_streams: 0}, metadata)
       {keepalive_opts, opts} = Keyword.split(opts, [:keepalive, :keepalive_tolerance])
 
@@ -150,7 +155,8 @@ if Code.ensure_loaded?(Mint.HTTP) do
             retry: retry,
             notify_drain: notify_drain,
             telemetry_metadata: metadata,
-            lane?: lane?
+            lane?: lane?,
+            http1_max_connections: max_http1
           ]
 
           unless lane? do
@@ -183,6 +189,28 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
+    def handle_call(:reserve_lane, from, state) do
+      case HTTP1Lanes.reserve(state.lanes, from) do
+        {:reply, reply, lanes} -> {:reply, reply, %{state | lanes: lanes}}
+        {:noreply, lanes} -> {:noreply, %{state | lanes: lanes}}
+      end
+    end
+
+    def handle_call({:attach_lane, token, lane}, _from, state) do
+      case HTTP1Lanes.attach_lane(state.lanes, token, lane) do
+        {:ok, lanes} ->
+          {:reply, :ok, %{state | lanes: lanes}}
+
+        {:error, lanes} ->
+          {:reply,
+           {:error,
+            GRPC.RPCError.exception(
+              GRPC.Status.unavailable(),
+              "the HTTP/1.1 connection slot expired"
+            )}, %{state | lanes: lanes}}
+      end
+    end
+
     def handle_call(:disconnect, from, state) do
       # TODO add a code to if disconnect is brutal we just  stop if is friendly we wait for pending requests
       # :ssl.close/1 can wait up to 5 seconds for the peer, so reply before the close.
@@ -338,6 +366,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
     end
 
     @impl true
+    def handle_cast({:release_lane, token}, state),
+      do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, token)}}
+
+    @impl true
+    def handle_info({:lane_expired, ref}, state),
+      do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, ref)}}
+
+    def handle_info({:DOWN, ref, :process, _pid, _reason}, state)
+        when is_map_key(state.lanes.monitors, ref),
+        do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, ref)}}
+
     def handle_info(:reconnect, state) do
       maybe_attempt_reconnect(state)
     end

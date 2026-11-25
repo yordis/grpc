@@ -55,7 +55,10 @@ defmodule GRPC.Client.ProtocolOptionsTest do
     describe "#{inspect(adapter)} with protocol: #{inspect(protocol)} on http://" do
       @describetag adapter: adapter, protocol: protocol
 
-      test "speaks HTTP/2 with prior knowledge by default", %{adapter: adapter, protocol: protocol} do
+      test "speaks HTTP/2 with prior knowledge by default", %{
+        adapter: adapter,
+        protocol: protocol
+      } do
         assert first_bytes(adapter, protocol, []) =~ @h2_preface
       end
 

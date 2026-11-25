@@ -36,6 +36,7 @@ if Code.ensure_loaded?(:gun) do
 
     require Logger
     alias GRPC.Client.Adapter
+    alias GRPC.Client.HTTP1Lanes
     alias GRPC.Client.Adapters.Gun.StreamResponseProcess
     alias GRPC.Client.Telemetry
 
@@ -80,45 +81,57 @@ if Code.ensure_loaded?(:gun) do
     # A request without a body, such as a Connect GET, has `nil` as the body.
     def request(connection_process_pid, method, path, headers, body, deadline) do
       request = {:request, method, path, headers, body, deadline}
-      connection_process_pid |> Adapter.call(request) |> on_lane(request)
+      connection_process_pid |> Adapter.call(request) |> on_lane(connection_process_pid, request)
     end
 
     def open_stream(connection_process_pid, path, headers, deadline \\ :infinity) do
       request = {:open_stream, path, headers, deadline}
-      connection_process_pid |> Adapter.call(request) |> on_lane(request)
+      connection_process_pid |> Adapter.call(request) |> on_lane(connection_process_pid, request)
     end
 
     # HTTP/1.1 carries one request at a time on a connection. A call that finds the
     # connection busy gets a connection of its own, for that one call. The reply
     # carries the pid that holds the stream, and the data, cancel and deadline calls
     # go to it.
-    defp on_lane({:busy, {channel, open_opts}}, request) do
-      case GenServer.start(__MODULE__, {channel, Map.put(open_opts, :lane?, true)}) do
-        {:ok, lane} ->
-          try do
-            timeout =
-              Map.get(open_opts, :await_timeout, @default_await_timeout) + @await_up_call_margin_ms
+    defp on_lane({:busy, {channel, open_opts}}, pid, request) do
+      with {:ok, token} <- acquire_lane(pid) do
+        case GenServer.start(__MODULE__, {channel, Map.put(open_opts, :lane?, true)}) do
+          {:ok, lane} ->
+            try do
+              timeout =
+                Map.get(open_opts, :await_timeout, @default_await_timeout) +
+                  @await_up_call_margin_ms
 
-            with :ok <- GenServer.call(lane, :await_up, timeout),
-                 {:ok, response} <- Adapter.call(lane, request) do
-              {:ok, Map.put(response, :conn_pid, lane)}
-            else
-              {:error, _reason} = error ->
+              with :ok <- HTTP1Lanes.attach(pid, token, lane),
+                   :ok <- GenServer.call(lane, :await_up, timeout),
+                   {:ok, response} <- Adapter.call(lane, request) do
+                {:ok, Map.put(response, :conn_pid, lane)}
+              else
+                {:error, _reason} = error ->
+                  stop_lane(lane)
+                  error
+              end
+            catch
+              :exit, reason ->
                 stop_lane(lane)
-                error
+                :erlang.raise(:exit, reason, __STACKTRACE__)
             end
-          catch
-            :exit, reason ->
-              stop_lane(lane)
-              :erlang.raise(:exit, reason, __STACKTRACE__)
-          end
 
-        {:error, reason} ->
-          {:error, reason}
+          {:error, reason} ->
+            HTTP1Lanes.release(pid, token)
+            {:error, reason}
+        end
       end
     end
 
-    defp on_lane(reply, _request), do: reply
+    defp on_lane(reply, _pid, _request), do: reply
+
+    defp acquire_lane(pid) do
+      case HTTP1Lanes.acquire(pid) do
+        {:error, %GRPC.RPCError{message: message}} -> {:error, message}
+        reply -> reply
+      end
+    end
 
     defp stop_lane(lane) do
       GenServer.stop(lane, :normal, 1_000)
@@ -163,6 +176,10 @@ if Code.ensure_loaded?(:gun) do
       {logical_ref, open_opts} = Map.pop(open_opts, :logical_connection_ref, channel.ref)
       metadata = metadata(channel, logical_ref)
       unless lane?, do: Telemetry.execute(:started, %{generation: 0, active_streams: 0}, metadata)
+
+      {max_http1, open_opts} =
+        Map.pop(open_opts, :http1_max_connections, HTTP1Lanes.default_max_connections())
+
       {await_timeout, open_opts} = Map.pop(open_opts, :await_timeout, @default_await_timeout)
       {response_window, open_opts} = Map.pop(open_opts, :response_window, :infinity)
 
@@ -177,6 +194,7 @@ if Code.ensure_loaded?(:gun) do
              channel: channel,
              logical_connection_ref: logical_ref,
              lane?: lane?,
+             lanes: HTTP1Lanes.new(max_http1),
              served?: false,
              http1?: false,
              spec: spec,
@@ -205,6 +223,23 @@ if Code.ensure_loaded?(:gun) do
 
     def handle_call(:await_up, from, %{status: :connecting} = state) do
       {:noreply, %{state | waiters: [from | state.waiters]}}
+    end
+
+    def handle_call(:reserve_lane, from, state) do
+      case HTTP1Lanes.reserve(state.lanes, from) do
+        {:reply, reply, lanes} -> {:reply, reply, %{state | lanes: lanes}}
+        {:noreply, lanes} -> {:noreply, %{state | lanes: lanes}}
+      end
+    end
+
+    def handle_call({:attach_lane, token, lane}, _from, state) do
+      case HTTP1Lanes.attach_lane(state.lanes, token, lane) do
+        {:ok, lanes} ->
+          {:reply, :ok, %{state | lanes: lanes}}
+
+        {:error, lanes} ->
+          {:reply, {:error, "the HTTP/1.1 connection slot expired"}, %{state | lanes: lanes}}
+      end
     end
 
     def handle_call(:disconnect, _from, %{gun_pid: gun_pid} = state) do
@@ -245,7 +280,18 @@ if Code.ensure_loaded?(:gun) do
     end
 
     @impl GenServer
+    def handle_cast({:release_lane, token}, state),
+      do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, token)}}
+
+    @impl GenServer
     def handle_info(message, state), do: message |> do_info(state) |> lane_done()
+
+    defp do_info({:lane_expired, ref}, state),
+      do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, ref)}}
+
+    defp do_info({:DOWN, ref, :process, _pid, _reason}, state)
+         when is_map_key(state.lanes.monitors, ref),
+         do: {:noreply, %{state | lanes: HTTP1Lanes.free(state.lanes, ref)}}
 
     # Messages from a connection that was retired are not about this one.
     defp do_info(message, %{gun_pid: current} = state)
@@ -255,9 +301,9 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp do_info(
-          {:gun_up, gun_pid, protocol},
-          %{status: :connecting, gun_pid: gun_pid} = state
-        ) do
+           {:gun_up, gun_pid, protocol},
+           %{status: :connecting, gun_pid: gun_pid} = state
+         ) do
       Process.cancel_timer(state.await_timer)
       state = %{state | await_timer: nil}
 
@@ -275,8 +321,7 @@ if Code.ensure_loaded?(:gun) do
 
           reply_waiters(state, :ok)
 
-          {:noreply,
-           %{state | status: :up, generation: 1, waiters: [], http1?: proto == :http}}
+          {:noreply, %{state | status: :up, generation: 1, waiters: [], http1?: proto == :http}}
 
         proto ->
           :gun.shutdown(gun_pid)
@@ -307,8 +352,8 @@ if Code.ensure_loaded?(:gun) do
     defp do_info(:await_up_timeout, state), do: {:noreply, state}
 
     defp do_info({:gun_up, _gun_pid, proto}, state)
-        when proto == :http2 or
-               (proto == :http and state.channel.protocol in [:connect, :grpc_web]) do
+         when proto == :http2 or
+                (proto == :http and state.channel.protocol in [:connect, :grpc_web]) do
       generation = state.generation + 1
 
       Telemetry.execute(
@@ -364,7 +409,10 @@ if Code.ensure_loaded?(:gun) do
         end)
 
       metadata = Map.put(metadata(state), :reason, reason)
-      unless state.lane?, do: Telemetry.execute(:down, %{streams_terminated: killed_count}, metadata)
+
+      unless state.lane?,
+        do: Telemetry.execute(:down, %{streams_terminated: killed_count}, metadata)
+
       {:noreply, %{new_state | max_concurrent_streams: :unknown}}
     end
 
@@ -379,9 +427,9 @@ if Code.ensure_loaded?(:gun) do
     end
 
     defp do_info(
-          {:DOWN, _monitor_ref, :process, gun_pid, reason},
-          %{status: :connecting, gun_pid: gun_pid} = state
-        ) do
+           {:DOWN, _monitor_ref, :process, gun_pid, reason},
+           %{status: :connecting, gun_pid: gun_pid} = state
+         ) do
       Process.cancel_timer(state.await_timer)
       connect_failed(metadata(state), {:down, reason})
       fail_connect(%{state | await_timer: nil}, {:down, reason})

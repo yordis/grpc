@@ -26,6 +26,12 @@ if Code.ensure_loaded?(:gun) do
         `:protocols` other than `[:http2]`. The Mint adapter reads the same option the
         same way.
 
+      * `:http1_max_connections` - the most connections the channel opens over HTTP/1.1
+        (default: `8`). HTTP/1.1 carries one call at a time on a connection, so a call that
+        finds the channel's connection busy opens another one for itself, up to this limit.
+        Calls over it wait for a connection to free, and fail with `UNAVAILABLE` after
+        5 seconds. HTTP/2 ignores it.
+
       * `:response_window` - bytes of a response the adapter reads ahead of the
         caller, per stream (default: `1_048_576`). The least value is `16_384`, one
         HTTP/2 frame. Gun counts the window in DATA frames, `ceil(window / 16_384)`
@@ -93,7 +99,8 @@ if Code.ensure_loaded?(:gun) do
     def validate_opts(opts) when is_list(opts) do
       http2_opts = Keyword.get(opts, :http2_opts)
 
-      with :ok <- validate_response_window(opts),
+      with :ok <- GRPC.Client.HTTP1Lanes.validate(opts),
+           :ok <- validate_response_window(opts),
            :ok <- validate_stream_window(http2_opts) do
         validate_connection_window(http2_opts)
       end

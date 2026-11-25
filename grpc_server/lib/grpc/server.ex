@@ -615,12 +615,12 @@ defmodule GRPC.Server do
   @doc false
   def start_endpoint(endpoint, port, opts \\ []) do
     opts =
-      Keyword.validate!(opts,
+      Keyword.validate!(opts, [
+        :max_body_size,
         adapter: GRPC.Server.Adapters.Cowboy,
         adapter_opts: [],
-        exception_log_filter: nil,
-        max_body_size: nil
-      )
+        exception_log_filter: nil
+      ])
 
     adapter = opts[:adapter]
     servers = endpoint.__meta__(:servers)

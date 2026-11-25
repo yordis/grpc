@@ -291,10 +291,19 @@ if Code.ensure_loaded?(Mint.HTTP) do
       |> ConnectionProcess.start_link(host, port, opts)
     end
 
-    defp do_receive_data(%{payload: %{stream_response_pid: pid}}, request_type, opts)
+    defp do_receive_data(
+           %{payload: %{stream_response_pid: pid}} = grpc_stream,
+           request_type,
+           opts
+         )
          when request_type in [:bidirectional_stream, :server_stream] do
       produce_trailers? = opts[:return_headers] == true
-      stream = StreamResponseProcess.build_stream(pid, produce_trailers?)
+
+      stream =
+        pid
+        |> StreamResponseProcess.build_stream(produce_trailers?, call_timeout(grpc_stream))
+        |> Stream.map(&deadline_error(&1, grpc_stream, pid))
+
       headers_or_error = Enum.at(stream, 0)
       # if this check fails then an error tuple will be returned
       with {:headers, headers} <- headers_or_error do
@@ -306,17 +315,29 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
+    # The call's timeout bounds a streaming call as a whole, as it does with Gun.
+    defp deadline_error({:error, :deadline_exceeded}, stream, pid) do
+      give_up_on_request(stream, pid)
+      GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :deadline)
+      {:error, GRPC.RPCError.exception(GRPC.Status.deadline_exceeded(), "deadline exceeded")}
+    end
+
+    defp deadline_error(response, _stream, _pid), do: response
+
+    defp call_timeout(%{payload: %{deadline: deadline}}) when is_integer(deadline),
+      do: {:deadline, deadline}
+
+    defp call_timeout(_stream), do: :infinity
+
     defp do_receive_data(
            %{payload: %{stream_response_pid: pid}} = stream,
            request_type,
            opts
          )
          when request_type in [:client_stream, :unary] do
-      started = System.monotonic_time(:millisecond)
-
       responses =
         pid
-        |> StreamResponseProcess.build_stream(true, recv_timeout(request_type, opts))
+        |> StreamResponseProcess.build_stream(true, recv_timeout(stream, request_type, opts))
         |> Enum.to_list()
 
       case check_for_error(responses) do
@@ -360,7 +381,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
           {:error, error}
 
         {:error, %Mint.HTTPError{reason: {:server_closed_request, :cancel}} = error} ->
-          if reset_at_deadline?(started, request_type, opts) do
+          if reset_at_deadline?(stream) do
             give_up_on_request(stream, pid)
             GRPC.Client.Telemetry.mark_rpc_failure(:after_dispatch, :deadline)
 
@@ -381,22 +402,17 @@ if Code.ensure_loaded?(Mint.HTTP) do
     # reached it, so it never expires before the client's own deadline. A CANCEL reset
     # that arrives once the deadline has passed is that deadline, whichever side notices
     # first. The 1ms is only the millisecond truncation of the two clocks.
-    defp reset_at_deadline?(started, request_type, opts) do
-      case recv_timeout(request_type, opts) do
-        timeout when is_integer(timeout) ->
-          System.monotonic_time(:millisecond) - started >= timeout - @deadline_tolerance
+    defp reset_at_deadline?(%{payload: %{deadline: deadline}}) when is_integer(deadline),
+      do: System.monotonic_time(:millisecond) >= deadline - @deadline_tolerance
 
-        _ ->
-          false
-      end
-    end
+    defp reset_at_deadline?(_stream), do: false
 
     # Only unary receives are bounded. Server and bidirectional streams are
     # consumed lazily by the caller, where a gap between messages is expected
     # rather than a failure, and a client stream awaits its response through a
     # separate `GRPC.Stub.recv/2` call, which `GRPC.Stub` documents as unbounded
     # even though it fills in the same 10s default.
-    defp recv_timeout(:unary, opts) do
+    defp recv_timeout(_stream, :unary, opts) do
       # An explicit `:deadline` wins: `GRPC.Stub` always fills in a `:timeout`,
       # so a deadline could never take effect otherwise. Both arrive here as a
       # float number of milliseconds, already negative for a deadline in the
@@ -408,7 +424,7 @@ if Code.ensure_loaded?(Mint.HTTP) do
       end
     end
 
-    defp recv_timeout(_request_type, _opts), do: :infinity
+    defp recv_timeout(stream, :client_stream, _opts), do: call_timeout(stream)
 
     # The caller stopped waiting on a request that is still open. Reset it so the
     # server stops working on it, and stop the process that buffers the response:
@@ -514,7 +530,13 @@ if Code.ensure_loaded?(Mint.HTTP) do
       stream
       |> GRPC.Client.Stream.put_payload(:response, response)
       |> GRPC.Client.Stream.put_payload(:stream_response_pid, stream_response_pid)
+      |> GRPC.Client.Stream.put_payload(:deadline, request_deadline(opts[:timeout]))
     end
+
+    defp request_deadline(timeout) when is_integer(timeout),
+      do: System.monotonic_time(:millisecond) + max(timeout, 0)
+
+    defp request_deadline(_timeout), do: nil
 
     defp get_headers_and_trailers(responses) do
       %{headers: Keyword.get(responses, :headers), trailers: Keyword.get(responses, :trailers)}

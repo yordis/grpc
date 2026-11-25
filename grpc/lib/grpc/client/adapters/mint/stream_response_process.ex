@@ -36,6 +36,8 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
   for a response that may never arrive — the connection process notifies this
   process, so anything that stops it from doing so (a connection that goes down
   without cleaning up, for instance) would otherwise block the caller forever.
+  `{:deadline, at}`, with `at` a `System.monotonic_time(:millisecond)` instant, bounds
+  the whole stream instead: each wait lasts until then.
   Defaults to `:infinity` to keep the previous behaviour for callers that do not
   ask for a deadline.
   """
@@ -49,6 +51,10 @@ defmodule GRPC.Client.Adapters.Mint.StreamResponseProcess do
         |> get_response(timeout)
         |> process_response(produce_trailers?, pid, timeout)
     end)
+  end
+
+  defp get_response(pid, {:deadline, at}) do
+    get_response(pid, max(at - System.monotonic_time(:millisecond), 0))
   end
 
   defp get_response(pid, timeout) do

@@ -16,3 +16,5 @@ if !parsed[:warnings_as_errors] do
 end
 
 ExUnit.start(capture_log: true)
+
+GRPC.TestCerts.init()

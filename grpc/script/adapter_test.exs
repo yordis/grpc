@@ -30,18 +30,33 @@ supported_adapters = [Gun, Mint]
 
 Logger.info("Testing #{adapter_to_test}...")
 
+# The certificate is generated on every run, so there is no committed one to expire.
 build_credential = fn ->
-  cert_path = Path.expand("./tls/server1.pem", :code.priv_dir(:grpc))
-  key_path = Path.expand("./tls/server1.key", :code.priv_dir(:grpc))
-  ca_path = Path.expand("./tls/ca.pem", :code.priv_dir(:grpc))
+  dir = Path.join(System.tmp_dir!(), "grpc_adapter_test_#{System.unique_integer([:positive])}")
+  File.mkdir_p!(dir)
+
+  %{server_config: server} =
+    :public_key.pkix_test_data(%{
+      server_chain: %{
+        root: [key: {:rsa, 2048, 65_537}],
+        peer: [key: {:rsa, 2048, 65_537}]
+      },
+      client_chain: %{root: [key: {:rsa, 2048, 65_537}], peer: [key: {:rsa, 2048, 65_537}]}
+    })
+
+  write_pem = fn name, type, der ->
+    path = Path.join(dir, name)
+    File.write!(path, :public_key.pem_encode([{type, der, :not_encrypted}]))
+    path
+  end
+
+  {key_type, key_der} = server[:key]
 
   struct(
     Credential,
     ssl: [
-      certfile: cert_path,
-      cacertfile: ca_path,
-      keyfile: key_path,
-      verify: :verify_none,
+      certfile: write_pem.("server.pem", :Certificate, server[:cert]),
+      keyfile: write_pem.("server.key", key_type, key_der),
       versions: [:"tlsv1.2", :"tlsv1.3"]
     ]
   )

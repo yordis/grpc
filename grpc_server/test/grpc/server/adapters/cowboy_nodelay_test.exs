@@ -4,8 +4,6 @@ defmodule GRPC.Server.Adapters.CowboyNodelayTest do
   # See https://github.com/elixir-grpc/grpc/issues/323
   use ExUnit.Case, async: false
 
-  alias GRPC.Credential
-
   defmodule PlainEndpoint do
     use GRPC.Endpoint
     run(FeatureServer)
@@ -17,12 +15,7 @@ defmodule GRPC.Server.Adapters.CowboyNodelayTest do
   end
 
   setup do
-    cred = %Credential{
-      ssl: [
-        certfile: Path.expand("../../../../priv/tls/server1.pem", __DIR__),
-        keyfile: Path.expand("../../../../priv/tls/server1.key", __DIR__)
-      ]
-    }
+    cred = GRPC.TestCerts.server_credential()
 
     {:ok, _, port} = GRPC.Server.start_endpoint(PlainEndpoint, 0)
     {:ok, _, tls_port} = GRPC.Server.start_endpoint(TLSEndpoint, 0, adapter_opts: [cred: cred])
@@ -62,7 +55,8 @@ defmodule GRPC.Server.Adapters.CowboyNodelayTest do
     {:ok, client} =
       :ssl.connect(~c"127.0.0.1", port,
         active: false,
-        verify: :verify_none,
+        verify: :verify_peer,
+        cacertfile: GRPC.TestCerts.files().server_ca,
         alpn_advertised_protocols: ["h2"]
       )
 

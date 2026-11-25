@@ -40,7 +40,7 @@ defmodule Conformance.LauncherTest do
     unicode = :io.getopts(:standard_io)[:encoding]
     input = Conformance.Protocol.open_input()
     message = Conformance.Protocol.read(input)
-    Conformance.Protocol.write(<<unicode == :unicode>> <> message)
+    Conformance.Protocol.write((if unicode == :unicode, do: <<1>>, else: <<0>>) <> message)
     System.halt(0)
     """
 

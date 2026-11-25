@@ -1,6 +1,7 @@
 # Scope: the Elixir client speaking the gRPC-Web protocol, over HTTP/1.1 and HTTP/2.
 # Measured with an empty known-failing list:
 #   CLIENT_ADAPTER=mint conformance/run.sh config/client.grpcweb.yaml
+#   CLIENT_ADAPTER=gun conformance/run.sh config/client.grpcweb.yaml
 features:
   versions: [HTTP_VERSION_1, HTTP_VERSION_2]
   protocols: [PROTOCOL_GRPC_WEB]

@@ -30,6 +30,7 @@ CLIENT_ADAPTER=mint conformance/run.sh config/client.yaml        # client, Mint 
 CLIENT_ADAPTER=gun  conformance/run.sh config/client.yaml        # client, Gun adapter
 CLIENT_ADAPTER=mint conformance/run.sh config/client.connect.yaml # client, Connect protocol, Mint adapter
 CLIENT_ADAPTER=mint conformance/run.sh config/client.grpcweb.yaml # client, gRPC-Web protocol, Mint adapter
+CLIENT_ADAPTER=gun conformance/run.sh config/client.grpcweb.yaml  # client, gRPC-Web protocol, Gun adapter
 ```
 
 `run.sh` applies `config/<name>.known_failing.txt` (server) or
@@ -73,7 +74,7 @@ as a full segment, so partial wildcards such as `Protocol:*` do not match.
 | `config/grpc.yaml` | server | gRPC and gRPC-Web, proto and JSON, identity and gzip, every stream type, HTTP/1.1, HTTP/2, h2c, TLS, TLS client certificates, trailers, message receive limit |
 | `config/full.yaml` | server | the same plus Connect, which the library does not implement |
 | `config/client.connect.yaml` | client | the Connect protocol (`protocol: :connect`) with the Mint adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, GET, timeouts, cancellation, message receive limit |
-| `config/client.grpcweb.yaml` | client | the gRPC-Web protocol (`protocol: :grpc_web`) with the Mint adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, trailers, timeouts, cancellation, message receive limit |
+| `config/client.grpcweb.yaml` | client | the gRPC-Web protocol (`protocol: :grpc_web`) with the Mint or Gun adapter over HTTP/1.1 and HTTP/2, h2c, TLS and client certificates, proto and JSON, identity and gzip, every stream type, trailers, timeouts, cancellation, message receive limit |
 | `config/client.yaml` | client | gRPC over HTTP/2 with the Mint or Gun adapter, proto and JSON, identity and gzip, every stream type, TLS and client certificates, message receive limit |
 
 Left off on purpose: Connect GET and Connect in `grpc.yaml` (no Connect support), HTTP/1.1

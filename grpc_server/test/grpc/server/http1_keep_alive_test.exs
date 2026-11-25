@@ -126,7 +126,8 @@ defmodule GRPC.Server.Http1KeepAliveTest do
          headers,
          first_chunk,
          path \\ @path,
-         second_chunk \\ ""
+         second_chunk \\ "",
+         next_path \\ nil
        ) do
     {:ok, socket} = :gen_tcp.connect(~c"localhost", port, [:binary, active: false])
 
@@ -159,7 +160,7 @@ defmodule GRPC.Server.Http1KeepAliveTest do
     :ok =
       :gen_tcp.send(
         socket,
-        "POST #{path} HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n" <>
+        "POST #{next_path || path} HTTP/1.1\r\nhost: localhost\r\ncontent-type: application/json\r\n" <>
           "connect-protocol-version: 1\r\ncontent-length: 15\r\n\r\n{\"name\":\"next\"}"
       )
 
@@ -195,6 +196,58 @@ defmodule GRPC.Server.Http1KeepAliveTest do
           unquote(content_type),
           unquote(headers),
           unquote(body)
+        )
+      end)
+    end
+  end
+
+  # A client may hold its request body open after the reply. The server reads no more once
+  # the client goes quiet, rather than wait out the whole bound, and it does not hold the
+  # stream, or the connection, until then.
+  test "a request body held open after the reply does not stall the server" do
+    run_server(HelloServer, fn port ->
+      {:ok, socket} = :gen_tcp.connect(~c"localhost", port, [:binary, active: false])
+
+      :ok =
+        :gen_tcp.send(
+          socket,
+          "POST #{@path} HTTP/1.1\r\nhost: localhost\r\ntransfer-encoding: chunked\r\n" <>
+            "content-type: application/grpc+proto\r\ngrpc-encoding: nope\r\n\r\n" <>
+            "5\r\n#{<<0, 0::32>>}\r\n"
+        )
+
+      assert {:ok, "HTTP/1.1 " <> _} = :gen_tcp.recv(socket, 0, 5_000)
+
+      # The client sends nothing more. The server gives up on the body, and Cowboy closes.
+      started = System.monotonic_time(:millisecond)
+      assert {:error, :closed} = recv_until_closed(socket)
+      assert System.monotonic_time(:millisecond) - started < 600
+    end)
+  end
+
+  defp recv_until_closed(socket) do
+    case :gen_tcp.recv(socket, 0, 3_000) do
+      {:ok, _} -> recv_until_closed(socket)
+      other -> other
+    end
+  end
+
+  # The router answers a path no service serves before any handler runs.
+  for {name, content_type, headers} <- [
+        {"connect", "application/json", [{"connect-protocol-version", "1"}]},
+        {"grpc-web", "application/grpc-web+proto", []},
+        {"grpc", "application/grpc+proto", []}
+      ] do
+    test "the connection stays open after an unknown method (#{name}), with the request body still streaming" do
+      run_server(HelloServer, fn port ->
+        assert_kept_alive_while_streaming(
+          port,
+          unquote(content_type),
+          unquote(headers),
+          "{}",
+          "/unknown.Service/Method",
+          "",
+          @path
         )
       end)
     end

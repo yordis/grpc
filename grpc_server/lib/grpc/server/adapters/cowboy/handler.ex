@@ -930,14 +930,19 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
   # Cowboy drops an HTTP/1.1 connection when a request ends with its body unfinished and
   # of unknown length (chunked, as a streaming client sends it). The client may be about
   # to reuse the connection, and fails with "server closed idle connection", so what is
-  # left of the body is read, within a bound of bytes and of time.
+  # left of the body is read, within a bound of bytes and of time. The reply is sent
+  # already, so the read ends as soon as the client goes quiet. A client that holds its
+  # body open past that is not about to reuse the connection: Go's HTTP/1 client closes
+  # a connection whose request body is unfinished shortly after the response.
   @drain_max_bytes 1_000_000
   @drain_max_time 1_000
+  @drain_quiet_time 200
 
-  defp drain_request_body(
-         %{version: :"HTTP/1.1", has_body: true, body_length: :undefined} = req,
-         state
-       ) do
+  @doc false
+  def drain_request_body(
+        %{version: :"HTTP/1.1", has_body: true, body_length: :undefined} = req,
+        state
+      ) do
     deadline = System.monotonic_time(:millisecond) + @drain_max_time
 
     case is_map(state) && Map.get(state, :pending_reader) do
@@ -950,7 +955,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
           {:request_body, ^read_ref, :nofin, body} ->
             do_drain_request_body(req, byte_size(body), deadline)
         after
-          @drain_max_time -> :ok
+          @drain_quiet_time -> :ok
         end
 
       _none ->
@@ -958,7 +963,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
-  defp drain_request_body(_req, _state), do: :ok
+  def drain_request_body(_req, _state), do: :ok
 
   defp do_drain_request_body(req, drained, deadline) do
     left = deadline - System.monotonic_time(:millisecond)
@@ -966,7 +971,11 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     if drained > @drain_max_bytes or left <= 0 do
       :ok
     else
-      case :cowboy_req.read_body(req, %{length: 64_000, period: left}) do
+      # The stream handler ignores the period while no data is buffered, so the timeout
+      # is what ends the wait. It exits, and the catch below treats that as quiet.
+      quiet = min(left, @drain_quiet_time)
+
+      case :cowboy_req.read_body(req, %{length: 64_000, period: quiet, timeout: quiet}) do
         {:ok, _data, _req} ->
           :ok
 

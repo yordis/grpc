@@ -51,14 +51,22 @@ defmodule GRPC.Server.Adapters.Cowboy.Router do
          Map.merge(env, %{handler: handler, handler_opts: handler_opts})}
 
       {:error, :notfound, :host} ->
-        {:stop, :cowboy_req.reply(400, req)}
+        {:stop, reply(400, req)}
 
       {:error, :badrequest, :path} ->
-        {:stop, :cowboy_req.reply(400, req)}
+        {:stop, reply(400, req)}
 
       {:error, :notfound, :path} ->
-        {:stop, :cowboy_req.reply(404, req)}
+        {:stop, reply(404, req)}
     end
+  end
+
+  # No handler runs for these, so no `terminate/3` reads what is left of the request body,
+  # and Cowboy would drop an HTTP/1.1 connection that a streaming client is about to reuse.
+  defp reply(status, req) do
+    req = :cowboy_req.reply(status, req)
+    GRPC.Server.Adapters.Cowboy.Handler.drain_request_body(req, nil)
+    req
   end
 
   def match([], _, _) do

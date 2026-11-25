@@ -39,7 +39,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     http_method = extract_http_method(req)
     exception_log_filter = extract_exception_log_filter_opt(opts)
 
-    with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, opts),
+    with {:ok, access_mode, sub_type, content_type} <- find_content_type_subtype(req, server, opts),
          {:ok, codec} <- find_codec(sub_type, content_type, server),
          :ok <- check_connect_get(req, server, route, access_mode),
          {:ok, compressor} <- find_compressor(req, server, access_mode) do
@@ -207,7 +207,7 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
     end
   end
 
-  defp find_content_type_subtype(req, opts) do
+  defp find_content_type_subtype(req, server, opts) do
     content_type =
       case :cowboy_req.header("content-type", req) do
         :undefined ->
@@ -234,9 +234,17 @@ defmodule GRPC.Server.Adapters.Cowboy.Handler do
 
     access_mode = resolve_access_mode(req, access_mode, subtype)
     {access_mode, subtype} = pin_transcoded_route(opts, req, access_mode, subtype)
-    {access_mode, subtype} = detect_connect(opts, req, content_type, access_mode, subtype)
+    connect? = server.__meta__(:connect)
+
+    {access_mode, subtype} =
+      if connect?,
+        do: detect_connect(opts, req, content_type, access_mode, subtype),
+        else: {access_mode, subtype}
 
     cond do
+      not connect? ->
+        {:ok, access_mode, subtype, content_type}
+
       wrong_connect_method?(opts, req, content_type) ->
         {:error,
          {:connect, 405, %{"allow" => "POST"},

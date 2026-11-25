@@ -6,7 +6,7 @@ defmodule GRPC.Server.Http1KeepAliveTest do
   # connection"), so no reply may end the connection.
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     def say_hello(%{name: "boom"}, _stream) do
       raise GRPC.RPCError, status: :unauthenticated, message: "no"
@@ -70,7 +70,7 @@ defmodule GRPC.Server.Http1KeepAliveTest do
   end
 
   defmodule RouteServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service
+    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true
 
     def list_features(%{lo: %{latitude: 99}}, _stream) do
       raise GRPC.RPCError, status: :resource_exhausted, message: "no"

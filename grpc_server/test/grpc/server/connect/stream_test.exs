@@ -4,7 +4,7 @@ defmodule GRPC.Server.Connect.StreamTest do
   alias GRPC.Test.ConnectClient
 
   defmodule RouteServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service, compressors: [GRPC.Compressor.Gzip]
+    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true, compressors: [GRPC.Compressor.Gzip]
 
     def list_features(%{lo: %{latitude: 99}}, _stream) do
       raise GRPC.RPCError, status: :not_found, message: "nothing here"

@@ -9,14 +9,14 @@ defmodule GRPC.Integration.ClientReceiveLimitTest do
   @reply_size 600
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     def say_hello(_req, _stream),
       do: %Helloworld.HelloReply{message: String.duplicate("x", 600)}
   end
 
   defmodule RouteServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service
+    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true
 
     def list_features(_rect, stream) do
       GRPC.Server.send_reply(stream, %Routeguide.Feature{name: String.duplicate("x", 600)})

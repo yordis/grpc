@@ -8,6 +8,8 @@
 
 ### Behavior Changes
 
+  * The Connect protocol is opt-in: a server serves it only when it sets `use GRPC.Server, service: ..., connect: true`. With the option off, which is the default, a request keeps the protocol it had before Connect: a `POST` with `application/json` to a gRPC path is a transcoded call, with `grpc-status` trailers and the gRPC to HTTP status map, not a Connect call with a JSON error body. `application/proto`, `application/connect+*` and `GET ?encoding=...` are served only with the option on. Upgrade note: set `connect: true` on each `use GRPC.Server` that should answer Connect clients (the Connect conformance server does so).
+
   * `config :grpc, max_message_length: bytes` limits only the messages the server receives again. The limit of what the server sends is `config :grpc, max_send_message_length: bytes`, which is independent and defaults to 2 GiB. Before, the send limit followed the receive limit unless it was set, so a server with a low receive limit refused a reply of the same size. If you relied on `:max_message_length` to cap replies, set `:max_send_message_length` too.
 
 ### Bug Fixes

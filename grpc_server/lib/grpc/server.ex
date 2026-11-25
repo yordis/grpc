@@ -95,6 +95,24 @@ defmodule GRPC.Server do
         string message = 1;
       }
 
+  ## Connect protocol
+
+  The [Connect protocol](https://connectrpc.com/docs/protocol) is served only by a server
+  that sets `connect: true`:
+
+      use GRPC.Server, service: Greeter.Service, connect: true
+
+  The server then answers, on the gRPC path of each method (`/helloworld.Greeter/SayHello`),
+  `POST` with `application/proto` and `application/json` (unary), `application/connect+proto`
+  and `application/connect+json` (streaming), and `GET` with `?encoding=` for a method marked
+  `NO_SIDE_EFFECTS`. Errors come back as a Connect JSON body. Without the option these
+  requests keep the behavior they had before Connect: a `POST` with `application/json` is a
+  transcoded call, and its errors carry `grpc-status` trailers. The content type must fit
+  the method: a unary content type on a streaming method, or a streaming content type on a
+  unary method, is refused with HTTP 415.
+
+  The option is independent of `http_transcode: true`, and the two can be combined.
+
   In addition to the `POST localhost/helloworld.Greeter/SayHello` route in the previous examples
   this creates an additional route: `GET localhost/v1/greeter/:name`
 

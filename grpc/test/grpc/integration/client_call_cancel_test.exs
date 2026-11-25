@@ -10,7 +10,7 @@ defmodule GRPC.Integration.ClientCallCancelTest do
   @reset_wait 3_000
 
   defmodule HelloServer do
-    use GRPC.Server, service: Helloworld.Greeter.Service
+    use GRPC.Server, service: Helloworld.Greeter.Service, connect: true
 
     # Reports its process, then never answers.
     def say_hello(%{name: "echo"}, _stream), do: %Helloworld.HelloReply{message: "Hello, echo"}
@@ -22,7 +22,7 @@ defmodule GRPC.Integration.ClientCallCancelTest do
   end
 
   defmodule RouteServer do
-    use GRPC.Server, service: Routeguide.RouteGuide.Service
+    use GRPC.Server, service: Routeguide.RouteGuide.Service, connect: true
 
     # Sends two features, reports its process, then keeps the stream open.
     def list_features(_rect, stream) do
